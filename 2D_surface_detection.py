@@ -9,238 +9,168 @@ import numpy as np
 import matplotlib.pyplot as plt
 import skimage.io 
 import scipy.ndimage as scp
-import scipy
 import slgbuilder
+
+import honeycombUnfold
+
 
 
 def rescaleImage(img, minVal, maxVal):
+    """Rescales input image to a given range.\n
+    Params:\n
+    img - image to rescale\n
+    minVal - minimum pixel value\n
+    maxVal - maximum pixel value.
+    """
     img = ((img - img.min()) * (minVal/(img.max() - img.min()) * maxVal)).astype(np.int32)
     return img
 
-class HoneycombUnfold:
-    lines = np.array([])
-    lines_interp = np.empty((2,0))
-    normals = np.empty((2,2,0))
-    unfolding_points = np.empty((2,0))
 
-    interp_points=0
+def unfoldedHoneycombSurfDetect(unfolded_img, visualize=False, return_helper_surfaces=False):
+    """ Detects edges of honeycomb structure based on an unfolded image.\n
+    Params:
+    unfolded_img - unfolded image of a honeycomb\n
+    visualize - if True, plots the resulting surfaces on an unfolded image
+    return_helper_surfaces - if True, returns also dark helper surfaces.
+    """
+    # Layered surface detection parameters - hidden, they don't need to be changed
+    darkSurfacesWeight = 300 # weight of dark surfaces cost 
+    smoothness = [2,1] # honeycomb edge and dark surface smoothness term 
+    honeycombSurfacesMargin = [4, 25] # min, max distance margin between the honeycomb edges
+    darkSurfacesMargin = [10, 35] # min, max distance margin between the dark helper surfaces
+    darkToHoneycombMinMargin = 1 # min distance between the helper surface and honeycomb edge
 
-    def __init__(self, img, visualize=True):
-        self.img = img
-        self.img_shape = img.shape
-        self.visualize = visualize
+    layers = [slgbuilder.GraphObject(0*unfolded_img), slgbuilder.GraphObject(0*unfolded_img), # no on-surface cost
+            slgbuilder.GraphObject(darkSurfacesWeight*unfolded_img), slgbuilder.GraphObject(darkSurfacesWeight*unfolded_img)] # extra 2 dark lines
+    helper = slgbuilder.MaxflowBuilder()
+    helper.add_objects(layers)
 
-        if visualize == True:
-            self.fig, self.ax = plt.subplots(2,2)
+    ## Adding regional costs, 
+    # The region in the middle is bright compared to two darker regions.
+    helper.add_layered_region_cost(layers[0], unfolded_img, np.max(unfolded_img)-unfolded_img)
+    helper.add_layered_region_cost(layers[1], np.max(unfolded_img)-unfolded_img, unfolded_img)
 
-    def draw_corners(self):
+    ## Adding geometric constrains
+    # Blocks crossing from bottom to top of the image
+    helper.add_layered_boundary_cost() 
+    # Surface smoothness term
+    helper.add_layered_smoothness(layers[0:2],delta=smoothness[0], wrap=False)
+    helper.add_layered_smoothness(layers[2:4],delta=smoothness[1], wrap=False)
+    # Honeycomb edges pair  
+    helper.add_layered_containment(layers[0], layers[1], min_margin=honeycombSurfacesMargin[0], max_margin=honeycombSurfacesMargin[1])
+    # Dark helper surfaces 
+    helper.add_layered_containment(layers[2], layers[3], min_margin=darkSurfacesMargin[0], max_margin=darkSurfacesMargin[1])
+    # Top dark surface and top honeycomb edge 
+    helper.add_layered_containment(layers[2], layers[0], min_margin=darkToHoneycombMinMargin) 
+    # Bottom honeycomb edge and bottom dark surface
+    helper.add_layered_containment(layers[1], layers[3], min_margin=darkToHoneycombMinMargin) 
 
+    ## Cut
+    helper.solve()
+    segmentations = [helper.what_segments(l).astype(np.int32) for l in layers]
+    segmentation_lines = [s.shape[0] - np.argmax(s[::-1,:], axis=0) - 1 for s in segmentations]
+
+    ## Unfolded image visualization
+    if visualize == True:
         plt.figure()
-        plt.imshow(self.img, cmap='gray')
-        plt.suptitle("Click on the corners of one of the folds from left to right.")
-        plt.title("Left button - new point, Right button - remove point, Middle button - end process", fontsize=8)
-
-        ax = plt.gca()
-        xy = plt.ginput(-1, timeout=60)
-        plt.close()
-
-        x = [p[0] for p in xy]
-        y = [p[1] for p in xy]
-        self.lines = np.array([x,y])
-
-        if self.visualize == True:
-            self.ax[0,0].imshow(self.img, cmap='gray')
-            self.ax[0,0].plot(self.lines[0,:],self.lines[1,:], '-')
-
-    def interpolate_points(self,num_points=50):
-        if self.lines.size == 0 or self.lines.shape[1] < 2:
-            raise Exception('No lines are defined. Define the line first with draw_line')
-        for i in range(self.lines.shape[1]-1):
-            # Get linterpolation start and end points
-            x1 = self.lines[0,i]
-            x2 = self.lines[0,i+1]
-            y1 = self.lines[1,i]
-            y2 = self.lines[1,i+1]
-            # Interpolate x and y
-            x_interp = np.linspace(x1,x2,num_points)
-            y_interp = np.linspace(y1,y2,num_points)
-            # Merge and append to main vector
-            line_interp = np.array([x_interp,y_interp])
-            self.lines_interp = np.hstack((self.lines_interp,line_interp))
-
-        if self.visualize == True:
-            self.ax[0,1].imshow(self.img, cmap='gray')
-            self.ax[0,1].plot(self.lines_interp[0,:],self.lines_interp[1,:], '*',markersize=1)
-
-    def smooth_interp_corners(self):
-        if self.lines_interp.size == 0:
-            raise Exception('Interpolated points are not defined')
-        # Pass x and y through gaussian smoothing filter
-        x_smooth = scp.gaussian_filter1d(self.lines_interp[0,:],3)
-        y_smooth = scp.gaussian_filter1d(self.lines_interp[1,:],3)
-        self.lines_interp = np.array([x_smooth,y_smooth])
-
-        if self.visualize == True:
-            self.ax[1,0].imshow(self.img, cmap='gray')
-            self.ax[1,0].plot(self.lines_interp[0,:],self.lines_interp[1,:], '*',markersize=1)
-            # plt.show()
-
-    def calculate_normals(self,normals_range=30):
-        if self.lines_interp.size == 0:
-            raise Exception('Interpolated points are not defined')
-        for i in range(self.lines_interp.shape[1]-1):
-            # Calculate direction vector for the point
-            if i == 0:
-                vec = self.lines_interp[:,i+1] - self.lines_interp[:,i]
-            elif i == self.lines_interp.shape[1]-1:
-                vec = self.lines_interp[:,i] - self.lines_interp[:,i-1]
+        plt.imshow(unfolded_img, cmap='gray')
+        for i in range(len(segmentation_lines)):
+            if i < 2:
+                plt.plot(segmentation_lines[i], 'r')
             else:
-                vec = self.lines_interp[:,i+1] - self.lines_interp[:,i-1]
-            # Normalize vector
-            vec = vec/np.linalg.norm(vec)
-            # Calculate perpendicular vector
-            per_vec = np.empty_like(vec)
-            per_vec[0] = -vec[1]
-            per_vec[1] = vec[0]
-            # Create 2 points moved by the vector in either direction
-            xy1 = self.lines_interp[:,i] + normals_range*per_vec
-            xy2 = self.lines_interp[:,i] - normals_range*per_vec
-            # create normal and add to vector
-            normal = np.array((xy1,xy2))
-            self.normals = np.dstack((self.normals,normal))
-        
-        if self.visualize == True:
-            self.ax[1,1].imshow(self.img, cmap='gray')
-            for i in range(self.normals.shape[2]):
-                self.ax[1,1].plot(self.normals[:,0,i],self.normals[:,1,i], '-',color='k')
-            plt.show()
+                plt.plot(segmentation_lines[i], 'b')
 
-    def get_unfold_points_from_normals(self, interp_points=60):
-        if self.normals.shape[2] == 0:
-            raise Exception('normals are not defined')
+        plt.show()
 
-        self.interp_points = interp_points
-        for i in range(self.normals.shape[2]):
-            # Get linterpolation start and end points
-            x1 = self.normals[1,0,i]
-            x2 = self.normals[0,0,i]
-            y1 = self.normals[1,1,i]
-            y2 = self.normals[0,1,i]
-            # Interpolate x and y
-            x_interp = np.linspace(x1,x2,interp_points)
-            y_interp = np.linspace(y1,y2,interp_points)
-            # Merge and append to main vector
-            line_interp = np.array([x_interp,y_interp])
-            self.unfolding_points = np.hstack((line_interp,self.unfolding_points))
-
-    def unfold_image(self):
-        if self.unfolding_points.shape[1] == 0:
-            raise Exception('Unfolding points are not defined')
-
-        x = np.linspace(0,self.img_shape[0]-1,self.img_shape[0])
-        y = np.linspace(0,self.img_shape[1]-1,self.img_shape[1])
-        img_interp = scipy.interpolate.RegularGridInterpolator((y, x), self.img.transpose(), method='linear')
-        unfolded_img = img_interp(self.unfolding_points.transpose())
-        unfolded_img = unfolded_img.reshape((self.normals.shape[2],self.interp_points)).transpose()
-
-        return unfolded_img.astype(np.int32)
-        
-    def fold_lines_back(self, lines, interpolate=True):
-        """Folds line back to original shape. Returns a line with original data points 
-        or with one (rounded) value for each x axis pixel, if interpolate=True"""
-        # TODO: better interpolation
-        if self.unfolding_points.shape[1] == 0:
-            raise Exception('Unfolding points are not defined')
-        # Create "coordinate image" out of normals unfolding points
-        unfolding_points_mat = self.unfolding_points.reshape(2,self.normals.shape[2],self.interp_points)
-        folded_lines = []
-        for i in range(len(lines)):
-            folded_line = np.empty((2,0))
-            line = lines[i]
-            for j in range(line.shape[0]):
-                # Get point position on original image
-                point = unfolding_points_mat[:,j,line[j]]
-                # Append to line vec
-                folded_line = np.hstack((folded_line,np.expand_dims(point,axis=1)))
-            # Sort line ascending in relation to x axis
-            folded_line = folded_line[:,np.argsort(folded_line[0, :])]
-            if interpolate == True:
-                # Create interpolated line
-                f = scipy.interpolate.interp1d(folded_line[0, :], folded_line[1, :])
-                xnew = np.arange(np.ceil(folded_line[0, 0]),np.floor(folded_line[0, -1]),1)
-                ynew = np.round(f(xnew))
-                folded_line = np.array([xnew,ynew])
-
-            folded_lines.append(folded_line)
-        return folded_lines
+    if return_helper_surfaces == False:
+        segmentation_lines.pop(-1)
+        segmentation_lines.pop(-1)
+    
+    return segmentation_lines
 
 
-I = skimage.io.imread('data/29-2016_29-2016-60kV-zoom-center_recon.tif')
+def detect2dLayers(img, layer_num, params):
+    """ Calls unfolding and layered surface detection methods to 
+    detect multiple layers in a 2D honeycomb image.\n
+    Parameters:\n
+    img - 2D honecomb image\n
+    layer_num - number of layers to detect\n
+    params - list of detection parameters:\n
+        visualizeUnfolding - if True, visualizes the unfolding process steps\n
+        interpPointsScale - multiplier of the amount points between the corners that will be interpolated
+            1 equals the distance value between the points\n
+        normalLinesRange - Range (half of the length) of lines normal to interpolation points\n
+        interpolateFoldedSurface - if True - interpolates unfolded surface to have a value for each x axis pixel\n
+        returnHelperSurfaces - if True, returns also dark helper surfaces from surface detection process.
+    """
 
-I_2d = I[500,:,:]
-# Median filter for removing salt and pepper-like noise
-I_2d = scp.median_filter(I_2d, size=5)
+    if len(params)!= 5:
+            raise Exception(f'Expected 5 parameters:\
+            visualizeUnfolding, interpPointsScale, normalLinesRange,,\
+            interpolateFoldedSurface, returnHelperSurfaces, but got only {len(params)}')
 
-hc = HoneycombUnfold(I_2d, visualize=False)
-hc.draw_corners() 
-hc.interpolate_points()
-hc.smooth_interp_corners()
-hc.calculate_normals(normals_range=30)
-hc.get_unfold_points_from_normals(interp_points=60)
-unfolded_img = hc.unfold_image()
+    #Extracting parameters from params list
+    visualizeUnfolding = params[0]
+    interpPointsScale = params[1]
+    normalLinesRange = params[2]
+    interpolateFoldedSurface = params[3]
+    returnHelperSurfaces = params[4]
 
-# Rescale image - the black background pixels are removed
-unfolded_img = rescaleImage(unfolded_img, 1, 255)
+    ### Unfolding
+    hcList = []
+    vis_img = rescaleImage(img, 1, 255)
+    for i in range(layer_num):
+        hc = honeycombUnfold.HoneycombUnfold2d(img, vis_img, visualize=visualizeUnfolding)
+        vis_img = hc.draw_corners() 
+        hcList.append(hc)
 
-# plt.figure()
-# plt.imshow(unfolded_img, cmap='gray')
-# plt.show()
+    layersList = []
+    for i in range(layer_num):
+        hc = hcList[i]
+        hc.interpolate_points(points_scale=interpPointsScale)
+        hc.smooth_interp_corners()
+        hc.calculate_normals(normals_range=normalLinesRange)
+        hc.get_unfold_points_from_normals(interp_points= normalLinesRange*2)
+        unfolded_img = hc.unfold_image()
+        unfolded_img = rescaleImage(unfolded_img, 1, 255)
 
-scale = 50
-layers = [slgbuilder.GraphObject(0*unfolded_img), slgbuilder.GraphObject(0*unfolded_img), # no on-surface cost
-            slgbuilder.GraphObject(scale*unfolded_img), slgbuilder.GraphObject(scale*unfolded_img)] # extra 2 dark lines
-helper = slgbuilder.MaxflowBuilder()
-helper.add_objects(layers)
+        ### Layered surfaces detection
+        segmentation_surfaces = unfoldedHoneycombSurfDetect(unfolded_img, 
+            visualize=visualizeUnfolding, return_helper_surfaces=returnHelperSurfaces)
 
-# Adding regional costs, 
-# the region in the middle is bright compared to two darker regions.
-helper.add_layered_region_cost(layers[0], unfolded_img, np.max(unfolded_img)-unfolded_img)
-helper.add_layered_region_cost(layers[1], np.max(unfolded_img)-unfolded_img, unfolded_img)
+        ## Fold detected lines back to original image shape
+        folded_surfaces = hc.fold_surfaces_back(segmentation_surfaces,interpolate=interpolateFoldedSurface)
+        layersList.append(folded_surfaces)
+    return layersList
 
-# Adding geometric constrains
-helper.add_layered_boundary_cost() # blocks crossing from bottom to top of the image
-helper.add_layered_smoothness(delta=2, wrap=False)  # line smoothness term
-helper.add_layered_containment(layers[0], layers[1], min_margin=4, max_margin=25) # honeycomb lines pair
-helper.add_layered_containment(layers[2], layers[3], min_margin=10, max_margin=45) # dark helper lines
-helper.add_layered_containment(layers[2], layers[0], min_margin=1) # top dark line and top honeycomb line
-helper.add_layered_containment(layers[1], layers[3], min_margin=1) # bottom honeycomb line and bottom dark line
+if __name__ == "__main__":
 
-# Cut
-helper.solve()
-segmentations = [helper.what_segments(l).astype(np.int32) for l in layers]
-segmentation_lines = [s.shape[0] - np.argmax(s[::-1,:], axis=0) - 1 for s in segmentations]
+    I = skimage.io.imread('data/29-2016_29-2016-60kV-zoom-center_recon.tif')
 
-# Visualization
-plt.figure()
-plt.imshow(unfolded_img, cmap='gray')
-for i in range(len(segmentation_lines)):
-    if i < 2:
-        plt.plot(segmentation_lines[i], 'r')
-    else:
-        plt.plot(segmentation_lines[i], 'b')
+    I_2d = I[195,:,:]
+    # Median filter for removing salt and pepper-like noise
+    I_2d_filt = scp.median_filter(I_2d, size=[5,7])
 
-plt.show()
+    visualizeUnfolding = False # if True - visualizes the unfolding process steps
+    interpPointsScale = 0.4 # -multiplier of the amount points between the corners that will be interpolated 
+                        # 1 equals the distance value between the points
+    normalLinesRange = 50 # Range (half of the length) of lines normal to interpolation points
+    interpolateFoldedSurface = True # if True - interpolates unfolded surface to have a value for each x axis pixel
+    returnHelperSurfaces = False # if True, returns also dark helper surfaces from surface detection process
+    params = [visualizeUnfolding, interpPointsScale, normalLinesRange, 
+        interpolateFoldedSurface, returnHelperSurfaces]
 
+    layersList = detect2dLayers(I_2d_filt, 4, params)
 
-folded_lines = hc.fold_lines_back(segmentation_lines,interpolate=True)
+    plt.figure()
+    plt.imshow(I_2d_filt, cmap='gray')
+    for i in range(len(layersList)):
+        folded_surfaces = layersList[i]
+        for j in range(len(folded_surfaces)):
+            folded_surface = folded_surfaces[j]
+            if j < 2:
+                plt.plot(folded_surface[0,:],folded_surface[1,:], 'r')
+            else:
+                plt.plot(folded_surface[0,:],folded_surface[1,:], 'b')
 
-plt.figure()
-plt.imshow(I_2d, cmap='gray')
-for i in range(len(folded_lines)):
-    folded_line = folded_lines[i]
-    if i < 2:
-        plt.plot(folded_line[0,:],folded_line[1,:], 'r')
-    else:
-        plt.plot(folded_line[0,:],folded_line[1,:], 'b')
-
-plt.show()
+    plt.show()
