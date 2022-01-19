@@ -7,7 +7,7 @@ Created on Wed Jan 19 10:20:23 2022
 
 import numpy as np 
 import matplotlib.pyplot as plt
-import skimage
+import skimage.io
 import scipy.ndimage as scp
 import tifffile
 

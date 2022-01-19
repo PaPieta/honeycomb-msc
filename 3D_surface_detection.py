@@ -31,7 +31,9 @@ if __name__ == "__main__":
 
     hc = honeycombUnfold.HoneycombUnfold3d(I, vis_img, visualize=True)
     vis_img = hc.draw_corners() 
-    hc.interpolate_points(points_scale=1)
+    hc.interpolate_points(step=2)
+    hc.smooth_interp_corners()
+    hc.calculate_normals()
 
     # I_2d = I_filt[15,:,:]
 

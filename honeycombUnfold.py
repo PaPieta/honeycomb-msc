@@ -12,6 +12,20 @@ import scipy.ndimage as scp
 import scipy
 import cv2 as cv
 
+def surfaceNormal(poly):
+    n = [0.0, 0.0, 0.0]
+
+    for i, v_curr in enumerate(poly):
+        v_next = poly[(i+1) % len(poly)]
+        n[0] += (v_curr[1] - v_next[1]) * (v_curr[2] + v_next[2])
+        n[1] += (v_curr[2] - v_next[2]) * (v_curr[0] + v_next[0])
+        n[2] += (v_curr[0] - v_next[0]) * (v_curr[1] + v_next[1])
+
+    normalised = [i/sum(n) for i in n]
+
+    return normalised
+
+
 class HoneycombUnfold2d:
     lines = np.array([])
     lines_interp = np.empty((2,0))
@@ -182,14 +196,15 @@ class HoneycombUnfold2d:
 
 
 
-
 class HoneycombUnfold3d:
     lines = []
     lines_interp = np.empty((2,0))
-    normals = np.empty((2,2,0))
+    normals = np.empty((2,3,0))
     unfolding_points = np.empty((2,0))
 
-    interp_points=0
+    interp_points = 0
+    interp_x_len = 0
+    interp_z_len = 0
 
     def __init__(self, img, vis_img, visualize=True):
         self.img = img
@@ -240,7 +255,7 @@ class HoneycombUnfold3d:
         return self.vis_img
 
 
-    def interpolate_points(self,points_scale=1):
+    def interpolate_points(self,step=1):
         if len(self.lines) == 0:
             raise Exception('No lines are defined. Define the line first with draw_line')
 
@@ -257,17 +272,135 @@ class HoneycombUnfold3d:
         
         # we want to get y values based on x and z
         # Define interpolation points and get y values
-        #TODO: redo this, we need same set of x values for each z level
-        xnew = np.arange(x_low,x_high,points_scale)
-        znew = np.arange(0,self.img_shape[0],points_scale)
-        xi = np.array((xnew[:30],znew)).transpose()
+        zUnique = np.arange(0,self.img_shape[0],step)
+
+        xnew = np.empty(0)
+        znew = np.empty(0)
+        for i in range(zUnique.shape[0]):
+            xtemp = np.arange(x_low,x_high,step)
+            ztemp = np.full(xtemp.shape[0],zUnique[i])
+
+            xnew = np.hstack((xnew,xtemp))
+            znew = np.hstack((znew,ztemp))
+        # save for calculating normals
+        self.interp_x_len = xtemp.shape[0]
+        self.interp_z_len = zUnique.shape[0]
+
+        xi = np.array((xnew,znew)).transpose()
         points = np.array((linesArray[0, :],linesArray[2, :])).transpose()
         # create interpolation function  x,z,y order
         ynew = scipy.interpolate.griddata(points,linesArray[1, :], xi)
         self.lines_interp = np.array((xnew,ynew,znew))
 
 
+        if self.visualize == True:
+            plt.figure()
+            for i in range(3):
+                # Find interpolated z layer closest to the original image layers
+                zlayer = np.argmin(np.abs(zUnique-self.sliceIdx[i]))
+                # Get points for the layer
+                interp_points = self.lines_interp[0:2,zlayer*self.interp_x_len:(zlayer+1)*self.interp_x_len]
 
-        # if self.visualize == True:
-        #     self.ax[0,1].imshow(self.img, cmap='gray')
-        #     self.ax[0,1].plot(self.lines_interp[0,:],self.lines_interp[1,:], '*',markersize=1)
+                plt.subplot(1,3,i+1)
+                plt.imshow(self.img[self.sliceIdx[i],:,:], cmap='gray')
+                plt.plot(interp_points[0,:],interp_points[1,:], '*',markersize=1)
+            plt.show()
+
+    
+    def smooth_interp_corners(self):
+        if self.lines_interp.size == 0:
+            raise Exception('Interpolated points are not defined')
+        # Pass x and y through gaussian smoothing filter
+        x_smooth = np.empty(0)
+        y_smooth = np.empty(0)
+        for i in range(self.interp_z_len):
+            start = i*self.interp_x_len
+            end = (i+1)*self.interp_x_len
+            x_temp = scp.gaussian_filter1d(self.lines_interp[0,start:end],2)
+            y_temp = scp.gaussian_filter1d(self.lines_interp[1,start:end],2)
+            x_smooth = np.hstack((x_smooth,x_temp))
+            y_smooth = np.hstack((y_smooth,y_temp))
+        self.lines_interp = np.array([x_smooth,y_smooth,self.lines_interp[2,:]])
+
+        if self.visualize == True:
+            zUnique = np.unique(self.lines_interp[2,:])
+            plt.figure()
+            for i in range(3):
+                # Find interpolated z layer closest to the original image layers
+                zlayer = np.argmin(np.abs(zUnique-self.sliceIdx[i]))
+                # Get points for the layer
+                interp_points = self.lines_interp[0:2,zlayer*self.interp_x_len:(zlayer+1)*self.interp_x_len]
+
+                plt.subplot(1,3,i+1)
+                plt.imshow(self.img[self.sliceIdx[i],:,:], cmap='gray')
+                plt.plot(interp_points[0,:],interp_points[1,:], '*',markersize=1)
+            plt.show()
+
+    
+    def calculate_normals(self,normals_range=30):
+        if self.lines_interp.size == 0:
+            raise Exception('Interpolated points are not defined')
+        xCount=0
+        zCount=0
+        for i in range(self.lines_interp.shape[1]-1):
+            # Get triangle points x coords
+            if xCount == 0:
+                pt1_x = 0
+                pt2_x = 0
+                pt3_x = 1
+            elif xCount == self.interp_x_len-1:
+                pt1_x = 0
+                pt2_x = -1
+                pt3_x = 0
+            else:
+                pt1_x = 0
+                pt2_x = -1
+                pt3_x = 1
+            # Get triangle points z coords
+            if zCount == 0:
+                pt1_z = 0
+                pt2_z = self.interp_x_len
+                pt3_z = self.interp_x_len
+            elif zCount == self.interp_z_len-1:
+                pt1_z = -self.interp_x_len
+                pt2_z = 0
+                pt3_z = 0
+            else:
+                pt1_z = -self.interp_x_len
+                pt2_z = self.interp_x_len
+                pt3_z = self.interp_x_len
+            # Combine chosen coordinates to create points
+            pt1 = self.lines_interp[:,i+pt1_x+pt1_z]
+            pt2 = self.lines_interp[:,i+pt2_x+pt2_z]
+            pt3 = self.lines_interp[:,i+pt3_x+pt3_z]
+            # Create a list and calculate normal vector
+            poly = [pt1, pt2, pt3]
+            normVec = np.array(surfaceNormal(poly))
+            # Normalize vector
+            normVec = normVec/np.linalg.norm(normVec)
+            # Create 2 points moved by the vector in either direction
+            xyz1 = self.lines_interp[:,i] + normals_range*normVec
+            xyz2 = self.lines_interp[:,i] - normals_range*normVec
+            # create normal line and add to vector
+            normal = np.array((xyz1,xyz2))
+            self.normals = np.dstack((self.normals,normal))
+            # Update counters
+            xCount+=1
+            if xCount == self.interp_x_len:
+                xCount = 0
+                zCount +=1
+        
+        if self.visualize == True:
+            zUnique = np.unique(self.lines_interp[2,:])
+            plt.figure()
+            for i in range(3):
+                # Find interpolated z layer closest to the original image layers
+                zlayer = np.argmin(np.abs(zUnique-self.sliceIdx[i]))
+                # Get normals for the layer
+                temp_normals = self.normals[:,0:2,zlayer*self.interp_x_len:(zlayer+1)*self.interp_x_len]
+
+                plt.subplot(1,3,i+1)
+                plt.imshow(self.img[self.sliceIdx[i],:,:], cmap='gray')
+                for j in range(temp_normals.shape[2]):
+                    plt.plot(temp_normals[:,0,j],temp_normals[:,1,j], '-',color='k')
+            plt.show()
