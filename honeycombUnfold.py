@@ -61,7 +61,7 @@ class HoneycombUnfold2d:
         if self.lines.size == 0 or self.lines.shape[1] < 2:
             raise Exception('No lines are defined. Define the line first with draw_line')
         for i in range(self.lines.shape[1]-1):
-            # Get linterpolation start and end points
+            # Get interpolation start and end points
             x1 = self.lines[0,i]
             x2 = self.lines[0,i+1]
             y1 = self.lines[1,i]
@@ -180,8 +180,11 @@ class HoneycombUnfold2d:
         return folded_surfaces
 
 
+
+
+
 class HoneycombUnfold3d:
-    lines = np.empty((3,0,0))
+    lines = []
     lines_interp = np.empty((2,0))
     normals = np.empty((2,2,0))
     unfolding_points = np.empty((2,0))
@@ -193,15 +196,15 @@ class HoneycombUnfold3d:
         self.vis_img = vis_img
         self.img_shape = img.shape
         self.visualize = visualize
-        self.sliceIdx = [0, int(self.img_shape[0]/2), self.img_shape[0]]
+        self.sliceIdx = [0, int(self.img_shape[0]/2), self.img_shape[0]-1]
 
 
     def draw_corners(self):
 
         sliceList = ["Bottom", "Middle", "Top"]
-
+        # Loop through the slices (top, middle, bottom)
         for i in range(3):
-
+            # Create image for pointing the corners
             plt.figure()
             plt.imshow(self.vis_img[self.sliceIdx[i],:,:], cmap='gray')
             plt.suptitle(f"{sliceList[i]} slice: Click on the corners of folds of the chosen unmarked layer from left to right.")
@@ -210,24 +213,61 @@ class HoneycombUnfold3d:
             ax = plt.gca()
             xy = plt.ginput(-1, timeout=60)
             plt.close()
-
+            # Get point coordinates and append to a list
             x = [p[0] for p in xy]
             y = [p[1] for p in xy]
             z = [self.sliceIdx[i] for j in range(len(x))]
-            self.lines = np.dstack((self.lines,np.array([x,y,z])))
-
-            for j in range(self.lines.shape[1]-1):
-                start_point = (int(np.round(self.lines[i,0,j])), int(np.round(self.lines[i,1,j])))
-                end_point = (int(np.round(self.lines[i,0,j+1])), int(np.round(self.lines[i,1,j+1])))
+            line = np.array([x,y,z])
+            self.lines.append(line)
+            # Draw the lines onto the visualization image (needed for multiple surface caluclation)
+            for j in range(line.shape[1]-1):
+                start_point = (int(np.round(line[0,j])), int(np.round(line[1,j])))
+                end_point = (int(np.round(line[0,j+1])), int(np.round(line[1,j+1])))
                 color = (0, 0, 255)
                 thickness = 9
                 self.vis_img[self.sliceIdx[i],:,:] = cv.line(self.vis_img[self.sliceIdx[i],:,:], start_point, end_point, color, thickness)
-
+        # Plot the results of the corner drawing
         if self.visualize == True:
+            plt.figure()
             for i in range(3):
-                plt.figure()
-                plt.subplot(1,3,i)
+                line = self.lines[i]
+                plt.subplot(1,3,i+1)
                 plt.imshow(self.img[self.sliceIdx[i],:,:], cmap='gray')
-                plt.plot(self.lines[i,0,:],self.lines[i,1,:], '-')
+                plt.plot(line[0,:],line[1,:], '-')
+
+            plt.show()
                 
         return self.vis_img
+
+
+    def interpolate_points(self,points_scale=1):
+        if len(self.lines) == 0:
+            raise Exception('No lines are defined. Define the line first with draw_line')
+
+        x_low_list = []
+        x_high_list = []
+        linesArray = np.empty((3,0))
+        for i in range(len(self.lines)):
+            linesArray = np.hstack((linesArray,self.lines[i]))
+            x_low_list.append(np.min(self.lines[i][0,:]))
+            x_high_list.append(np.max(self.lines[i][0,:]))
+
+        x_low = np.max(np.array(x_low_list))
+        x_high = np.min(np.array(x_high_list))
+        
+        # we want to get y values based on x and z
+        # Define interpolation points and get y values
+        #TODO: redo this, we need same set of x values for each z level
+        xnew = np.arange(x_low,x_high,points_scale)
+        znew = np.arange(0,self.img_shape[0],points_scale)
+        xi = np.array((xnew[:30],znew)).transpose()
+        points = np.array((linesArray[0, :],linesArray[2, :])).transpose()
+        # create interpolation function  x,z,y order
+        ynew = scipy.interpolate.griddata(points,linesArray[1, :], xi)
+        self.lines_interp = np.array((xnew,ynew,znew))
+
+
+
+        # if self.visualize == True:
+        #     self.ax[0,1].imshow(self.img, cmap='gray')
+        #     self.ax[0,1].plot(self.lines_interp[0,:],self.lines_interp[1,:], '*',markersize=1)

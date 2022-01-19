@@ -160,7 +160,7 @@ if __name__ == "__main__":
     params = [visualizeUnfolding, interpPointsScale, normalLinesRange, 
         interpolateFoldedSurface, returnHelperSurfaces]
 
-    layersList = detect2dLayers(I_2d_filt, 4, params)
+    layersList = detect2dLayers(I_2d_filt, 1, params)
 
     plt.figure()
     plt.imshow(I_2d_filt, cmap='gray')
