@@ -12,19 +12,7 @@ import scipy.ndimage as scp
 import scipy
 import cv2 as cv
 
-def surfaceNormal(poly):
-    n = [0.0, 0.0, 0.0]
-
-    for i, v_curr in enumerate(poly):
-        v_next = poly[(i+1) % len(poly)]
-        n[0] += (v_curr[1] - v_next[1]) * (v_curr[2] + v_next[2])
-        n[1] += (v_curr[2] - v_next[2]) * (v_curr[0] + v_next[0])
-        n[2] += (v_curr[0] - v_next[0]) * (v_curr[1] + v_next[1])
-
-    normalised = [i/sum(n) for i in n]
-
-    return normalised
-
+import helpers
 
 class HoneycombUnfold2d:
     lines = np.array([])
@@ -142,16 +130,16 @@ class HoneycombUnfold2d:
         self.interp_points = interp_points
         for i in range(self.normals.shape[2]):
             # Get linterpolation start and end points
-            x1 = self.normals[1,0,i]
-            x2 = self.normals[0,0,i]
-            y1 = self.normals[1,1,i]
-            y2 = self.normals[0,1,i]
+            x1 = self.normals[1,1,i]
+            x2 = self.normals[0,1,i]
+            y1 = self.normals[1,0,i]
+            y2 = self.normals[0,0,i]
             # Interpolate x and y
             x_interp = np.linspace(x1,x2,interp_points)
             y_interp = np.linspace(y1,y2,interp_points)
             # Merge and append to main vector
             line_interp = np.array([x_interp,y_interp])
-            self.unfolding_points = np.hstack((line_interp,self.unfolding_points))
+            self.unfolding_points = np.hstack((self.unfolding_points,line_interp))
 
     def unfold_image(self):
         if self.unfolding_points.shape[1] == 0:
@@ -159,9 +147,15 @@ class HoneycombUnfold2d:
 
         x = np.linspace(0,self.img_shape[0]-1,self.img_shape[0])
         y = np.linspace(0,self.img_shape[1]-1,self.img_shape[1])
-        img_interp = scipy.interpolate.RegularGridInterpolator((y, x), self.img.transpose(), method='linear')
-        unfolded_img = img_interp(self.unfolding_points.transpose())
+        img_interp = scipy.interpolate.RegularGridInterpolator((x, y), self.img, method='linear')
+        temp_unf_points = np.swapaxes(self.unfolding_points,0,1)
+        unfolded_img = img_interp(temp_unf_points)
         unfolded_img = unfolded_img.reshape((self.normals.shape[2],self.interp_points)).transpose()
+
+        if self.visualize == True:
+            plt.figure()
+            plt.imshow(unfolded_img,cmap='gray')
+            plt.show()
 
         return unfolded_img.astype(np.int32)
         
@@ -171,7 +165,9 @@ class HoneycombUnfold2d:
         if self.unfolding_points.shape[1] == 0:
             raise Exception('Unfolding points are not defined')
         # Create "coordinate image" out of normals unfolding points
-        unfolding_points_mat = self.unfolding_points.reshape(2,self.normals.shape[2],self.interp_points)
+        # temp_unf_points = np.swapaxes(self.unfolding_points,0,1)
+        temp_unf_points = self.unfolding_points[[1,0],:]
+        unfolding_points_mat = temp_unf_points.reshape(2,self.normals.shape[2],self.interp_points)
         folded_surfaces = []
         for i in range(len(surfaces)):
             folded_surface = np.empty((2,0))
@@ -196,7 +192,7 @@ class HoneycombUnfold2d:
 
 
 
-class HoneycombUnfold3d:
+class HoneycombUnfoldSlicewise3d:
     lines = []
     lines_interp = np.empty((2,0))
     normals = np.empty((2,3,0))
@@ -303,7 +299,7 @@ class HoneycombUnfold3d:
 
                 plt.subplot(1,3,i+1)
                 plt.imshow(self.img[self.sliceIdx[i],:,:], cmap='gray')
-                plt.plot(interp_points[0,:],interp_points[1,:], '*',markersize=1)
+                plt.plot(interp_points[0,:],interp_points[1,:], '*',markersize=4)
             plt.show()
 
     
@@ -375,7 +371,7 @@ class HoneycombUnfold3d:
             pt3 = self.lines_interp[:,i+pt3_x+pt3_z]
             # Create a list and calculate normal vector
             poly = [pt1, pt2, pt3]
-            normVec = np.array(surfaceNormal(poly))
+            normVec = np.array(helpers.surfaceNormal(poly))
             # Normalize vector
             normVec = normVec/np.linalg.norm(normVec)
             # Create 2 points moved by the vector in either direction

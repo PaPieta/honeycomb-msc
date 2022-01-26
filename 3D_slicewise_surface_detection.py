@@ -1,21 +1,20 @@
 # -*- coding: utf-8 -*-
 """
-Created on Thu Jan 13 17:10:52 2022
+Created on Tue Jan 18 14:57:45 2022
 
 @author: pawel
 """
 
-from operator import truediv
+
 import numpy as np 
 import matplotlib.pyplot as plt
 import skimage.io 
 import scipy.ndimage as scp
 import slgbuilder
+import tifffile
 
-from honeycombUnfold2d import HoneycombUnfold2d
+from honeycombUnfoldSlicewise3d import HoneycombUnfoldSlicewise3d
 import helpers
-
-
 
 
 def unfoldedHoneycombSurfDetect(unfolded_img, honeycombCost,  visualize=False, return_helper_surfaces=False):
@@ -81,17 +80,15 @@ def unfoldedHoneycombSurfDetect(unfolded_img, honeycombCost,  visualize=False, r
     
     return segmentation_lines
 
-
-def detect2dLayers(img, layer_num, params):
+def detect3dSlicewiseLayers(img, layer_num, params):
     """ Calls unfolding and layered surface detection methods to 
-    detect multiple layers in a 2D honeycomb image.\n
+    detect multiple layers in a 3D honeycomb image using slicewise approach.\n
     Parameters:\n
     img - 2D honecomb image\n
     layer_num - number of layers to detect\n
     params - list of detection parameters:\n
         visualizeUnfolding - if True, visualizes the unfolding process steps\n
-        interpPointsScale - multiplier of the amount points between the corners that will be interpolated
-            1 equals the distance value between the points\n
+        interpStep - distance between the interpolated points\n
         normalLinesRange - Range (half of the length) of lines normal to interpolation points\n
         interpolateFoldedSurface - if True - interpolates unfolded surface to have a value for each x axis pixel\n
         returnHelperSurfaces - if True, returns also dark helper surfaces from surface detection process.
@@ -99,12 +96,12 @@ def detect2dLayers(img, layer_num, params):
 
     if len(params)!= 5:
             raise Exception(f'Expected 5 parameters:\
-            visualizeUnfolding, interpPointsScale, normalLinesRange,,\
+            visualizeUnfolding, interpStep, normalLinesRange,,\
             interpolateFoldedSurface, returnHelperSurfaces, but got only {len(params)}')
 
     #Extracting parameters from params list
     visualizeUnfolding = params[0]
-    interpPointsScale = params[1]
+    interpStep = params[1]
     normalLinesRange = params[2]
     interpolateFoldedSurface = params[3]
     returnHelperSurfaces = params[4]
@@ -112,66 +109,66 @@ def detect2dLayers(img, layer_num, params):
     ## Calculate image gaussian model 
     means, variances = helpers.imgGaussianModel(img)
 
-    ### Unfolding
-    hcList = []
+    vis_img = np.copy(img)
     vis_img = helpers.rescaleImage(img, 1, 255)
-    for i in range(layer_num):
-        hc = HoneycombUnfold2d(img, vis_img, visualize=visualizeUnfolding)
+    
+    ### Unfolding
+    hcList = [HoneycombUnfoldSlicewise3d(img, vis_img, visualize=visualizeUnfolding) for i in range(layer_num)]
+    for hc in hcList:
+        # hc = HoneycombUnfoldSlicewise3d(img, vis_img, visualize=visualizeUnfolding)
         vis_img = hc.draw_corners() 
-        hcList.append(hc)
+        # hcList.append(hc)
 
     layersList = []
     for i in range(layer_num):
         hc = hcList[i]
-        hc.interpolate_points(points_scale=interpPointsScale)
+        hc.interpolate_points(step=interpStep)
         hc.smooth_interp_corners()
         hc.calculate_normals(normals_range=normalLinesRange)
-        hc.get_unfold_points_from_normals(interp_points= normalLinesRange*2)
-        unfolded_img = hc.unfold_image()
+        hc.get_unfold_points_from_normals(interp_points=normalLinesRange*2)
+        unfolded_stack = hc.unfold_image()
         
-        # Calculate cost
-        honeycombCost = (1 - helpers.sigmoidProbFunction(unfolded_img,means,variances, visualize=visualizeUnfolding))*255
+        zstackList = []
+        for j in range(unfolded_stack.shape[0]):
+            unfolded_img = unfolded_stack[j,:,:]
+            # Calculate cost
+            honeycombCost = (1 - helpers.sigmoidProbFunction(unfolded_img,means,variances, visualize=(visualizeUnfolding and j == 0)))*255
 
-        if visualizeUnfolding == True:
-            plt.figure()
-            plt.imshow(honeycombCost)
-            plt.show()
+            if visualizeUnfolding == True and j == 0:
+                plt.figure()
+                plt.imshow(honeycombCost)
+                plt.show()
 
-        unfolded_img = helpers.rescaleImage(unfolded_img, 1, 255)
-        ### Layered surfaces detection
-        segmentation_surfaces = unfoldedHoneycombSurfDetect(unfolded_img, honeycombCost, 
-            visualize=visualizeUnfolding, return_helper_surfaces=returnHelperSurfaces)
+            unfolded_img = helpers.rescaleImage(unfolded_img, 1, 255)
+            ### Layered surfaces detection
+            segmentation_surfaces = unfoldedHoneycombSurfDetect(unfolded_img, honeycombCost, 
+                visualize=(visualizeUnfolding and j == 0), return_helper_surfaces=returnHelperSurfaces)
 
-        ## Fold detected lines back to original image shape
-        folded_surfaces = hc.fold_surfaces_back(segmentation_surfaces,interpolate=interpolateFoldedSurface)
-        layersList.append(folded_surfaces)
+            ## Fold detected lines back to original image shape
+            folded_surfaces = hc.fold_surfaces_back(segmentation_surfaces,interpolate=interpolateFoldedSurface)
+            zstackList.append(folded_surfaces)
+        layersList.append(zstackList)
     return layersList
+
 
 if __name__ == "__main__":
 
-    I = skimage.io.imread('data/29-2016_29-2016-60kV-zoom-center_recon.tif')
-
-    I_2d = I[200,:,:]
-    # I_2d = I[400,:,:]
-    # Median filter for removing salt and pepper-like noise
-    # I_2d_filt = scp.median_filter(I_2d, size=[5,7])
-
+    I = skimage.io.imread('data/29-2016_29-2016-60kV-resized.tif')
 
     visualizeUnfolding = False # if True - visualizes the unfolding process steps
-    interpPointsScale = 0.4 # -multiplier of the amount points between the corners that will be interpolated 
-                        # 1 equals the distance value between the points
+    interpStep = 2.5 # Distance between the interpolated points
     normalLinesRange = 40 # Range (half of the length) of lines normal to interpolation points
     interpolateFoldedSurface = True # if True - interpolates unfolded surface to have a value for each x axis pixel
     returnHelperSurfaces = False # if True, returns also dark helper surfaces from surface detection process
-    params = [visualizeUnfolding, interpPointsScale, normalLinesRange, 
+    params = [visualizeUnfolding, interpStep, normalLinesRange, 
         interpolateFoldedSurface, returnHelperSurfaces]
 
-    layersList = detect2dLayers(I_2d, 1, params)
-
+    layersList = detect3dSlicewiseLayers(I, 1, params)
+    
     plt.figure()
-    plt.imshow(I_2d, cmap='gray')
+    plt.imshow(I[15,:,:], cmap='gray')
     for i in range(len(layersList)):
-        folded_surfaces = layersList[i]
+        folded_surfaces = layersList[i][15]
         for j in range(len(folded_surfaces)):
             folded_surface = folded_surfaces[j]
             if j < 2:
@@ -180,3 +177,10 @@ if __name__ == "__main__":
                 plt.plot(folded_surface[0,:],folded_surface[1,:], 'b')
 
     plt.show()
+
+    segmImg = helpers.convertLayersToMatrix(layersList, I.shape)
+
+    plt.imshow(segmImg[15,:,:])
+    plt.show()
+
+    # tifffile.imsave('data/29-2016_29-2016-60kV-segm.tif',segmImg)
