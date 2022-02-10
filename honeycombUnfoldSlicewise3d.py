@@ -17,8 +17,6 @@ import helpers
 
 class HoneycombUnfoldSlicewise3d:
     
-
-
     def __init__(self, img, vis_img, visualize=True):
         self.img = img
         self.vis_img = vis_img
@@ -34,7 +32,16 @@ class HoneycombUnfoldSlicewise3d:
         self.interp_points = 0
         self.interp_x_len = 0
         self.interp_z_len = 0
-
+        # WARNING!! temporary
+        # self.lines = [np.array([[  6. , 101. , 167. , 312. , 392. , 489. ],
+        #                     [245. , 247.5, 128. , 120. , 229.5, 216. ],
+        #                     [  0. ,   0. ,   0. ,   0. ,   0. ,   0. ]]),
+        #             np.array([[ 10. , 103.5, 168.5, 313. , 393.5, 489.5],
+        #                     [246. , 249. , 130. , 122.5, 233. , 218. ],
+        #                     [ 15. ,  15. ,  15. ,  15. ,  15. ,  15. ]]),
+        #             np.array([[  9. , 101.5, 168. , 313.5, 393. , 491.5],
+        #                     [246. , 251. , 133.5, 125. , 234.5, 218.6],
+        #                     [ 29. ,  29. ,  29. ,  29. ,  29. ,  29. ]])]
 
     def draw_corners(self):
 
@@ -226,11 +233,15 @@ class HoneycombUnfoldSlicewise3d:
             z1 = self.normals[0,2,i]
             z2 = self.normals[1,2,i]
             # Interpolate x, y, z
-            x_interp = np.linspace(x1,x2,interp_points)
-            y_interp = np.linspace(y1,y2,interp_points)
-            z_interp = np.linspace(z1,z2,interp_points)
+            # x_interp = np.round(np.linspace(x1,x2,interp_points))
+            # y_interp = np.round(np.linspace(y1,y2,interp_points))
+            # z_interp = np.round(np.linspace(z1,z2,interp_points))
+            # x_interp = np.linspace(x1,x2,interp_points)
+            # y_interp = np.linspace(y1,y2,interp_points)
+            # z_interp = np.linspace(z1,z2,interp_points)
             # Merge and append to main vector
-            line_interp = np.array([x_interp,y_interp,z_interp])
+            # line_interp = np.array([x_interp,y_interp,z_interp])
+            line_interp = np.linspace([x1,y1,z1],[x2,y2,z2],interp_points).transpose()
             self.unfolding_points = np.hstack((self.unfolding_points,line_interp))
 
     def unfold_image(self):
@@ -259,7 +270,7 @@ class HoneycombUnfoldSlicewise3d:
 
         return unfolded_img.astype(np.int32)
 
-    def fold_surfaces_back(self, surfaces, interpolate=True):
+    def fold_surfaces_back(self, surfaces, zIdx, interpolate=True):
         """Folds surfaces back to original shape. Returns a line with original data points 
         or with one (rounded) value for each x axis pixel, if interpolate=True"""
         if self.unfolding_points.shape[1] == 0:
@@ -267,25 +278,27 @@ class HoneycombUnfoldSlicewise3d:
         # Create "coordinate image" out of normals unfolding points
         # temp_unf_points = np.swapaxes(self.unfolding_points,0,1)
         temp_unf_points = self.unfolding_points[[1,0],:]
-        unfolding_points_mat = temp_unf_points.reshape(2,self.normals.shape[2],self.interp_points)
+        unfolding_points_mat = temp_unf_points.reshape(2,self.interp_z_len,self.interp_x_len,self.interp_points)
         folded_surfaces = []
         for i in range(len(surfaces)):
             folded_surface = np.empty((2,0))
             surface = surfaces[i]
             for j in range(surface.shape[0]):
                 # Get point position on original image
-                point = unfolding_points_mat[:,j,surface[j]]
+                point = unfolding_points_mat[:,zIdx,j,surface[j]]
                 # Append to surface vec
                 folded_surface = np.hstack((folded_surface,np.expand_dims(point,axis=1)))
             # Sort surface ascending in relation to x axis
-            folded_surface = folded_surface[:,np.argsort(folded_surface[0, :])]
+            # folded_surface = folded_surface[:,np.argsort(folded_surface[0, :])]
             if interpolate == True:
                 # Create interpolated surface
                 f = scipy.interpolate.interp1d(folded_surface[0, :], folded_surface[1, :])
                 xnew = np.arange(np.ceil(folded_surface[0, 0]),np.floor(folded_surface[0, -1]),0.2)
                 ynew = f(xnew)
                 folded_surface = np.round(np.array([xnew,ynew]))
-                folded_surface = np.unique(folded_surface,axis=0)
+                # folded_surface = np.array([xnew,ynew])
+                _, idx  = np.unique(folded_surface,axis=0, return_index=True)
+                folded_surface = folded_surface[np.sort(idx)]
 
             folded_surfaces.append(folded_surface)
         return folded_surfaces

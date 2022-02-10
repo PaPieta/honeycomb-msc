@@ -161,7 +161,7 @@ if __name__ == "__main__":
     interpPointsScale = 0.4 # -multiplier of the amount points between the corners that will be interpolated 
                         # 1 equals the distance value between the points
     normalLinesRange = 40 # Range (half of the length) of lines normal to interpolation points
-    interpolateFoldedSurface = True # if True - interpolates unfolded surface to have a value for each x axis pixel
+    interpolateFoldedSurface = False # if True - interpolates unfolded surface to have a value for each x axis pixel
     returnHelperSurfaces = False # if True, returns also dark helper surfaces from surface detection process
     params = [visualizeUnfolding, interpPointsScale, normalLinesRange, 
         interpolateFoldedSurface, returnHelperSurfaces]

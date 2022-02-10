@@ -135,6 +135,8 @@ class HoneycombUnfold2d:
             y1 = self.normals[1,0,i]
             y2 = self.normals[0,0,i]
             # Interpolate x and y
+            # x_interp = np.round(np.linspace(x1,x2,interp_points))
+            # y_interp = np.round(np.linspace(y1,y2,interp_points))
             x_interp = np.linspace(x1,x2,interp_points)
             y_interp = np.linspace(y1,y2,interp_points)
             # Merge and append to main vector
@@ -178,7 +180,7 @@ class HoneycombUnfold2d:
                 # Append to surface vec
                 folded_surface = np.hstack((folded_surface,np.expand_dims(point,axis=1)))
             # Sort surface ascending in relation to x axis
-            folded_surface = folded_surface[:,np.argsort(folded_surface[0, :])]
+            # folded_surface = folded_surface[:,np.argsort(folded_surface[0, :])]
             if interpolate == True:
                 # Create interpolated surface
                 f = scipy.interpolate.interp1d(folded_surface[0, :], folded_surface[1, :])

@@ -13,7 +13,7 @@ import tifffile
 
 
 I = skimage.io.imread('data/29-2016_29-2016-60kV-zoom-center_recon.tif')
-I = I[400:460,:,:]
+I = I[300:500,:,:]
 
-I_resized = scp.zoom(I,(0.5,0.5,0.5))
-tifffile.imsave('data/29-2016_29-2016-60kV-resized.tif',I_resized)
+# I_resized = scp.zoom(I,(0.5,0.5,0.5))
+tifffile.imsave('data/29-2016_29-2016-60kV-resized_z200.tif',I)
