@@ -15,24 +15,48 @@ import cv2 as cv
 import helpers
 
 class HoneycombUnfold2d:
-    lines = np.array([])
-    lines_interp = np.empty((2,0))
-    normals = np.empty((2,2,0))
-    unfolding_points = np.empty((2,0))
-
-    interp_points=0
+    """Set of methods for unfolding and folding a slice of the honeycomb scan
+    for purposes of layered surfaces detection on a 2D image.\n
+    Pipeline of the segmentation process:\n
+    draw_corners -> interpolate_points -> smooth_interp-corners ->
+    calculate_normals -> get_unfold_points_from_normals -> unfold_image ->
+    (external) segment layered surfaces -> fold_surfaces_back."""
 
     def __init__(self, img, vis_img, visualize=True):
+        """Class initialization. 
+        Params:\n
+        img - 3D image stack of the honeycmb scan\n
+        vis_img - deep copy of the image stack for visualization purposes\n
+        visualize - if True, will visualize each step of the unfolding process\n
+        Attributes:\n
+        img, vis_img, visualize - see above\n
+        img_shape - shape of the input image\n
+        lines - list of corner points marked on the image representing the lines along the honeycomb structure\n
+        lines_interp - array of points interpolated along the lines
+        normals - array of lines normal to the orignal structure line, calculated for each interpolated point\n
+        unfolding_points - points interpolated along the normal lines, used for unfolding of the image\n
+        interp_points - number of interpolation points along each normal line\n
+        """
         self.img = img
         self.vis_img = vis_img
-        self.img_shape = img.shape
         self.visualize = visualize
+        self.img_shape = img.shape
+
+        self.lines = np.array([])
+        self.lines_interp = np.empty((2,0))
+        self.normals = np.empty((2,2,0))
+        self.unfolding_points = np.empty((2,0))
+
+        self.interp_points=0
 
         if visualize == True:
             self.fig, self.ax = plt.subplots(2,2)
 
-    def draw_corners(self):
 
+    def draw_corners(self):
+        """Opens interactive plot on a provided image to allow user to draw
+        corners of a chosen honeycomb surface.
+        """
         plt.figure()
         plt.imshow(self.vis_img, cmap='gray')
         plt.suptitle("Click on the corners of one of the unmarked folds from left to right.")
@@ -59,7 +83,12 @@ class HoneycombUnfold2d:
 
         return self.vis_img
 
+
     def interpolate_points(self,points_scale=1):
+        """interpolates points along marked corners with a chosen scale.\n
+        Params:\n
+        points_scale - interpolation step scale (ratio to a pixel)
+        """
         if self.lines.size == 0 or self.lines.shape[1] < 2:
             raise Exception('No lines are defined. Define the line first with draw_line')
         for i in range(self.lines.shape[1]-1):
@@ -80,7 +109,11 @@ class HoneycombUnfold2d:
             self.ax[0,1].imshow(self.img, cmap='gray')
             self.ax[0,1].plot(self.lines_interp[0,:],self.lines_interp[1,:], '*',markersize=1)
 
+
     def smooth_interp_corners(self):
+        """Applies smoothing on the interpolation points along X and Y axis 
+        to provide a smoother transition in the corners of the strucuture.
+        """
         if self.lines_interp.size == 0:
             raise Exception('Interpolated points are not defined')
         # Pass x and y through gaussian smoothing filter
@@ -93,7 +126,12 @@ class HoneycombUnfold2d:
             self.ax[1,0].plot(self.lines_interp[0,:],self.lines_interp[1,:], '*',markersize=1)
             # plt.show()
 
+
     def calculate_normals(self,normals_range=30):
+        """Calculate lines normal to the interpolated points with given range.\n
+        Params:\n
+        normals_range - length range of each normal line (length = 2*range)
+        """
         if self.lines_interp.size == 0:
             raise Exception('Interpolated points are not defined')
         for i in range(self.lines_interp.shape[1]-1):
@@ -123,7 +161,12 @@ class HoneycombUnfold2d:
                 self.ax[1,1].plot(self.normals[:,0,i],self.normals[:,1,i], '-',color='k')
             plt.show()
 
+
     def get_unfold_points_from_normals(self, interp_points=60):
+        """Interpolates points along each normal line to create unfolding points.\n
+        Params:\n
+        interp_points - number of points interpolated along each normal line.
+        """
         if self.normals.shape[2] == 0:
             raise Exception('normals are not defined')
 
@@ -143,7 +186,11 @@ class HoneycombUnfold2d:
             line_interp = np.array([x_interp,y_interp])
             self.unfolding_points = np.hstack((self.unfolding_points,line_interp))
 
+
     def unfold_image(self):
+        """Creates an unfolded image of the honeycomb structure 
+        using previously defined unfolding points.
+        """
         if self.unfolding_points.shape[1] == 0:
             raise Exception('Unfolding points are not defined')
 
@@ -161,9 +208,13 @@ class HoneycombUnfold2d:
 
         return unfolded_img.astype(np.int32)
         
-    def fold_surfaces_back(self, surfaces, interpolate=True):
-        """Folds surfaces back to original shape. Returns a line with original data points 
-        or with one (rounded) value for each x axis pixel, if interpolate=True"""
+
+    def fold_surfaces_back(self, surfaces):
+        """Folds surfaces back to original shape. Returns a line with original data points\n
+        Params:\n
+        surfaces - list of surfaces to unfold\n
+        zIdx - zAxis index of the surface
+        """
         if self.unfolding_points.shape[1] == 0:
             raise Exception('Unfolding points are not defined')
         # Create "coordinate image" out of normals unfolding points
@@ -180,14 +231,6 @@ class HoneycombUnfold2d:
                 # Append to surface vec
                 folded_surface = np.hstack((folded_surface,np.expand_dims(point,axis=1)))
             # Sort surface ascending in relation to x axis
-            # folded_surface = folded_surface[:,np.argsort(folded_surface[0, :])]
-            if interpolate == True:
-                # Create interpolated surface
-                f = scipy.interpolate.interp1d(folded_surface[0, :], folded_surface[1, :])
-                xnew = np.arange(np.ceil(folded_surface[0, 0]),np.floor(folded_surface[0, -1]),1)
-                ynew = np.round(f(xnew))
-                folded_surface = np.array([xnew,ynew])
-
             folded_surfaces.append(folded_surface)
         return folded_surfaces
 
@@ -209,7 +252,7 @@ class HoneycombUnfoldSlicewise3d:
         self.vis_img = vis_img
         self.img_shape = img.shape
         self.visualize = visualize
-        self.sliceIdx = [0, int(self.img_shape[0]/2), self.img_shape[0]-1]
+        self.slice_idx = [0, int(self.img_shape[0]/2), self.img_shape[0]-1]
 
 
     def draw_corners(self):
@@ -219,7 +262,7 @@ class HoneycombUnfoldSlicewise3d:
         for i in range(3):
             # Create image for pointing the corners
             plt.figure()
-            plt.imshow(self.vis_img[self.sliceIdx[i],:,:], cmap='gray')
+            plt.imshow(self.vis_img[self.slice_idx[i],:,:], cmap='gray')
             plt.suptitle(f"{sliceList[i]} slice: Click on the corners of folds of the chosen unmarked layer from left to right.")
             plt.title("Left button - new point, Right button - remove point, Middle button - end process", fontsize=8)
 
@@ -229,7 +272,7 @@ class HoneycombUnfoldSlicewise3d:
             # Get point coordinates and append to a list
             x = [p[0] for p in xy]
             y = [p[1] for p in xy]
-            z = [self.sliceIdx[i] for j in range(len(x))]
+            z = [self.slice_idx[i] for j in range(len(x))]
             line = np.array([x,y,z])
             self.lines.append(line)
             # Draw the lines onto the visualization image (needed for multiple surface caluclation)
@@ -238,14 +281,14 @@ class HoneycombUnfoldSlicewise3d:
                 end_point = (int(np.round(line[0,j+1])), int(np.round(line[1,j+1])))
                 color = (0, 0, 255)
                 thickness = 9
-                self.vis_img[self.sliceIdx[i],:,:] = cv.line(self.vis_img[self.sliceIdx[i],:,:], start_point, end_point, color, thickness)
+                self.vis_img[self.slice_idx[i],:,:] = cv.line(self.vis_img[self.slice_idx[i],:,:], start_point, end_point, color, thickness)
         # Plot the results of the corner drawing
         if self.visualize == True:
             plt.figure()
             for i in range(3):
                 line = self.lines[i]
                 plt.subplot(1,3,i+1)
-                plt.imshow(self.img[self.sliceIdx[i],:,:], cmap='gray')
+                plt.imshow(self.img[self.slice_idx[i],:,:], cmap='gray')
                 plt.plot(line[0,:],line[1,:], '-')
 
             plt.show()
@@ -295,12 +338,12 @@ class HoneycombUnfoldSlicewise3d:
             plt.figure()
             for i in range(3):
                 # Find interpolated z layer closest to the original image layers
-                zlayer = np.argmin(np.abs(zUnique-self.sliceIdx[i]))
+                zlayer = np.argmin(np.abs(zUnique-self.slice_idx[i]))
                 # Get points for the layer
                 interp_points = self.lines_interp[0:2,zlayer*self.interp_x_len:(zlayer+1)*self.interp_x_len]
 
                 plt.subplot(1,3,i+1)
-                plt.imshow(self.img[self.sliceIdx[i],:,:], cmap='gray')
+                plt.imshow(self.img[self.slice_idx[i],:,:], cmap='gray')
                 plt.plot(interp_points[0,:],interp_points[1,:], '*',markersize=4)
             plt.show()
 
@@ -325,12 +368,12 @@ class HoneycombUnfoldSlicewise3d:
             plt.figure()
             for i in range(3):
                 # Find interpolated z layer closest to the original image layers
-                zlayer = np.argmin(np.abs(zUnique-self.sliceIdx[i]))
+                zlayer = np.argmin(np.abs(zUnique-self.slice_idx[i]))
                 # Get points for the layer
                 interp_points = self.lines_interp[0:2,zlayer*self.interp_x_len:(zlayer+1)*self.interp_x_len]
 
                 plt.subplot(1,3,i+1)
-                plt.imshow(self.img[self.sliceIdx[i],:,:], cmap='gray')
+                plt.imshow(self.img[self.slice_idx[i],:,:], cmap='gray')
                 plt.plot(interp_points[0,:],interp_points[1,:], '*',markersize=1)
             plt.show()
 
@@ -393,12 +436,12 @@ class HoneycombUnfoldSlicewise3d:
             plt.figure()
             for i in range(3):
                 # Find interpolated z layer closest to the original image layers
-                zlayer = np.argmin(np.abs(zUnique-self.sliceIdx[i]))
+                zlayer = np.argmin(np.abs(zUnique-self.slice_idx[i]))
                 # Get normals for the layer
                 temp_normals = self.normals[:,0:2,zlayer*self.interp_x_len:(zlayer+1)*self.interp_x_len]
 
                 plt.subplot(1,3,i+1)
-                plt.imshow(self.img[self.sliceIdx[i],:,:], cmap='gray')
+                plt.imshow(self.img[self.slice_idx[i],:,:], cmap='gray')
                 for j in range(temp_normals.shape[2]):
                     plt.plot(temp_normals[:,0,j],temp_normals[:,1,j], '-',color='k')
             plt.show()

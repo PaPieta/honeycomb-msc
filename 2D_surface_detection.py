@@ -93,21 +93,17 @@ def detect2dLayers(img, layer_num, params):
         interpPointsScale - multiplier of the amount points between the corners that will be interpolated
             1 equals the distance value between the points\n
         normalLinesRange - Range (half of the length) of lines normal to interpolation points\n
-        interpolateFoldedSurface - if True - interpolates unfolded surface to have a value for each x axis pixel\n
         returnHelperSurfaces - if True, returns also dark helper surfaces from surface detection process.
     """
 
-    if len(params)!= 5:
-            raise Exception(f'Expected 5 parameters:\
-            visualizeUnfolding, interpPointsScale, normalLinesRange,,\
-            interpolateFoldedSurface, returnHelperSurfaces, but got only {len(params)}')
+    if len(params)!= 4:
+            raise Exception(f'Expected 4 parameters: visualizeUnfolding, interpPointsScale, normalLinesRange, returnHelperSurfaces, but got {len(params)}')
 
     #Extracting parameters from params list
     visualizeUnfolding = params[0]
     interpPointsScale = params[1]
     normalLinesRange = params[2]
-    interpolateFoldedSurface = params[3]
-    returnHelperSurfaces = params[4]
+    returnHelperSurfaces = params[3]
 
     ## Calculate image gaussian model 
     means, variances = helpers.imgGaussianModel(img)
@@ -143,7 +139,7 @@ def detect2dLayers(img, layer_num, params):
             visualize=visualizeUnfolding, return_helper_surfaces=returnHelperSurfaces)
 
         ## Fold detected lines back to original image shape
-        folded_surfaces = hc.fold_surfaces_back(segmentation_surfaces,interpolate=interpolateFoldedSurface)
+        folded_surfaces = hc.fold_surfaces_back(segmentation_surfaces)
         layersList.append(folded_surfaces)
     return layersList
 
@@ -161,10 +157,9 @@ if __name__ == "__main__":
     interpPointsScale = 0.4 # -multiplier of the amount points between the corners that will be interpolated 
                         # 1 equals the distance value between the points
     normalLinesRange = 40 # Range (half of the length) of lines normal to interpolation points
-    interpolateFoldedSurface = False # if True - interpolates unfolded surface to have a value for each x axis pixel
     returnHelperSurfaces = False # if True, returns also dark helper surfaces from surface detection process
     params = [visualizeUnfolding, interpPointsScale, normalLinesRange, 
-        interpolateFoldedSurface, returnHelperSurfaces]
+        returnHelperSurfaces]
 
     layersList = detect2dLayers(I_2d, 1, params)
 

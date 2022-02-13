@@ -30,7 +30,7 @@ class HoneycombUnfoldSlicewise3d:
         self.vis_img = vis_img
         self.img_shape = img.shape
         self.visualize = visualize
-        self.sliceIdx = [0, int(self.img_shape[0]/2), self.img_shape[0]-1]
+        self.slice_idx = [0, int(self.img_shape[0]/2), self.img_shape[0]-1]
 
 
     def draw_corners(self):
@@ -40,7 +40,7 @@ class HoneycombUnfoldSlicewise3d:
         for i in range(3):
             # Create image for pointing the corners
             plt.figure()
-            plt.imshow(self.vis_img[self.sliceIdx[i],:,:], cmap='gray')
+            plt.imshow(self.vis_img[self.slice_idx[i],:,:], cmap='gray')
             plt.suptitle(f"{sliceList[i]} slice: Click on the corners of folds of the chosen unmarked layer from left to right.")
             plt.title("Left button - new point, Right button - remove point, Middle button - end process", fontsize=8)
 
@@ -50,7 +50,7 @@ class HoneycombUnfoldSlicewise3d:
             # Get point coordinates and append to a list
             x = [p[0] for p in xy]
             y = [p[1] for p in xy]
-            z = [self.sliceIdx[i] for j in range(len(x))]
+            z = [self.slice_idx[i] for j in range(len(x))]
             line = np.array([x,y,z])
             self.lines.append(line)
             # Draw the lines onto the visualization image (needed for multiple surface caluclation)
@@ -59,14 +59,14 @@ class HoneycombUnfoldSlicewise3d:
                 end_point = (int(np.round(line[0,j+1])), int(np.round(line[1,j+1])))
                 color = (0, 0, 255)
                 thickness = 9
-                self.vis_img[self.sliceIdx[i],:,:] = cv.line(self.vis_img[self.sliceIdx[i],:,:], start_point, end_point, color, thickness)
+                self.vis_img[self.slice_idx[i],:,:] = cv.line(self.vis_img[self.slice_idx[i],:,:], start_point, end_point, color, thickness)
         # Plot the results of the corner drawing
         if self.visualize == True:
             plt.figure()
             for i in range(3):
                 line = self.lines[i]
                 plt.subplot(1,3,i+1)
-                plt.imshow(self.img[self.sliceIdx[i],:,:], cmap='gray')
+                plt.imshow(self.img[self.slice_idx[i],:,:], cmap='gray')
                 plt.plot(line[0,:],line[1,:], '-')
 
             plt.show()
@@ -116,12 +116,12 @@ class HoneycombUnfoldSlicewise3d:
             plt.figure()
             for i in range(3):
                 # Find interpolated z layer closest to the original image layers
-                zlayer = np.argmin(np.abs(zUnique-self.sliceIdx[i]))
+                zlayer = np.argmin(np.abs(zUnique-self.slice_idx[i]))
                 # Get points for the layer
                 interp_points = self.lines_interp[0:2,zlayer*self.interp_x_len:(zlayer+1)*self.interp_x_len]
 
                 plt.subplot(1,3,i+1)
-                plt.imshow(self.img[self.sliceIdx[i],:,:], cmap='gray')
+                plt.imshow(self.img[self.slice_idx[i],:,:], cmap='gray')
                 plt.plot(interp_points[0,:],interp_points[1,:], '*',markersize=4)
             plt.show()
 
@@ -146,12 +146,12 @@ class HoneycombUnfoldSlicewise3d:
             plt.figure()
             for i in range(3):
                 # Find interpolated z layer closest to the original image layers
-                zlayer = np.argmin(np.abs(zUnique-self.sliceIdx[i]))
+                zlayer = np.argmin(np.abs(zUnique-self.slice_idx[i]))
                 # Get points for the layer
                 interp_points = self.lines_interp[0:2,zlayer*self.interp_x_len:(zlayer+1)*self.interp_x_len]
 
                 plt.subplot(1,3,i+1)
-                plt.imshow(self.img[self.sliceIdx[i],:,:], cmap='gray')
+                plt.imshow(self.img[self.slice_idx[i],:,:], cmap='gray')
                 plt.plot(interp_points[0,:],interp_points[1,:], '*',markersize=1)
             plt.show()
 
@@ -214,12 +214,12 @@ class HoneycombUnfoldSlicewise3d:
             plt.figure()
             for i in range(3):
                 # Find interpolated z layer closest to the original image layers
-                zlayer = np.argmin(np.abs(zUnique-self.sliceIdx[i]))
+                zlayer = np.argmin(np.abs(zUnique-self.slice_idx[i]))
                 # Get normals for the layer
                 temp_normals = self.normals[:,0:2,zlayer*self.interp_x_len:(zlayer+1)*self.interp_x_len]
 
                 plt.subplot(1,3,i+1)
-                plt.imshow(self.img[self.sliceIdx[i],:,:], cmap='gray')
+                plt.imshow(self.img[self.slice_idx[i],:,:], cmap='gray')
                 for j in range(temp_normals.shape[2]):
                     plt.plot(temp_normals[:,0,j],temp_normals[:,1,j], '-',color='k')
             plt.show()

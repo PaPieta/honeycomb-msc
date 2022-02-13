@@ -30,16 +30,16 @@ def unfoldedHoneycombSurfDetect(unfolded_img, honeycombCost,  visualize=False, r
     return_helper_surfaces - if True, returns also dark helper surfaces.
     """
     # Layered surface detection parameters - hidden, they don't need to be changed
-    # darkSurfacesWeight = 300 # weight of dark surfaces cost 
-    # smoothness = [2,1] # honeycomb edge and dark surface smoothness term 
-    # honeycombSurfacesMargin = [4, 25] # min, max distance margin between the honeycomb edges
-    # darkSurfacesMargin = [10, 35] # min, max distance margin between the dark helper surfaces
-    # darkToHoneycombMinMargin = 1 # min distance between the helper surface and honeycomb edge
     darkSurfacesWeight = 300 # weight of dark surfaces cost 
-    smoothness = [1,1] # honeycomb edge and dark surface smoothness term 
-    honeycombSurfacesMargin = [2, 14] # min, max distance margin between the honeycomb edges
-    darkSurfacesMargin = [5, 17] # min, max distance margin between the dark helper surfaces
-    darkToHoneycombMinMargin = 0 # min distance between the helper surface and honeycomb edge
+    smoothness = [2,1] # honeycomb edge and dark surface smoothness term 
+    honeycombSurfacesMargin = [4, 25] # min, max distance margin between the honeycomb edges
+    darkSurfacesMargin = [10, 35] # min, max distance margin between the dark helper surfaces
+    darkToHoneycombMinMargin = 1 # min distance between the helper surface and honeycomb edge
+    # darkSurfacesWeight = 300 # weight of dark surfaces cost 
+    # smoothness = [1,1] # honeycomb edge and dark surface smoothness term 
+    # honeycombSurfacesMargin = [2, 14] # min, max distance margin between the honeycomb edges
+    # darkSurfacesMargin = [5, 17] # min, max distance margin between the dark helper surfaces
+    # darkToHoneycombMinMargin = 0 # min distance between the helper surface and honeycomb edge
 
     layers = [slgbuilder.GraphObject(0*honeycombCost), slgbuilder.GraphObject(0*honeycombCost), # no on-surface cost
             slgbuilder.GraphObject(darkSurfacesWeight*(255-honeycombCost)), slgbuilder.GraphObject(darkSurfacesWeight*(255-honeycombCost))] # extra 2 dark lines
@@ -70,6 +70,8 @@ def unfoldedHoneycombSurfDetect(unfolded_img, honeycombCost,  visualize=False, r
     helper.solve()
     segmentations = [helper.what_segments(l).astype(np.int32) for l in layers]
     segmentation_lines = [s.shape[0] - np.argmax(s[::-1,:], axis=0) - 1 for s in segmentations]
+    #Correct for 0.5 pixel shift
+    segmentation_lines = [x+0.5 for x in segmentation_lines]
 
     ## Unfolded image visualization
     if visualize == True:
@@ -99,21 +101,17 @@ def detect3dSlicewiseLayers(img, layer_num, params):
         visualizeUnfolding - if True, visualizes the unfolding process steps\n
         interpStep - distance between the interpolated points\n
         normalLinesRange - Range (half of the length) of lines normal to interpolation points\n
-        interpolateFoldedSurface - if True - interpolates unfolded surface to have a value for each x axis pixel\n
         returnHelperSurfaces - if True, returns also dark helper surfaces from surface detection process.
     """
 
-    if len(params)!= 5:
-            raise Exception(f'Expected 5 parameters:\
-            visualizeUnfolding, interpStep, normalLinesRange,,\
-            interpolateFoldedSurface, returnHelperSurfaces, but got only {len(params)}')
+    if len(params)!= 4:
+            raise Exception(f'Expected 4 parameters: visualizeUnfolding, interpStep, normalLinesRange, returnHelperSurfaces, but got {len(params)}')
 
     #Extracting parameters from params list
     visualizeUnfolding = params[0]
     interpStep = params[1]
     normalLinesRange = params[2]
-    interpolateFoldedSurface = params[3]
-    returnHelperSurfaces = params[4]
+    returnHelperSurfaces = params[3]
 
     ## Calculate image gaussian model 
     means, variances = helpers.imgGaussianModel(img)
@@ -135,10 +133,13 @@ def detect3dSlicewiseLayers(img, layer_num, params):
         print("Points interpolated")
         hc.smooth_interp_corners()
         print("Points smoothed")
-        hc.calculate_normals(normals_range=normalLinesRange)
-        print("Normals calculated")
         t0 = time.time()
-        hc.get_unfold_points_from_normals(interp_points=normalLinesRange*2)
+        # hc.calculate_normals(normals_range=normalLinesRange)
+        hc.calculate_normals2(normals_range=normalLinesRange)
+        t1 = time.time()
+        print(f"Normals calculated, time: {t1-t0}")
+        t0 = time.time()
+        hc.get_unfold_points_from_normals2(interp_points=normalLinesRange*2) #!!!!!
         t1 = time.time()
         print(f"Normals interpolated, time: {t1-t0}")
         unfolded_stack = hc.unfold_image()
@@ -161,7 +162,7 @@ def detect3dSlicewiseLayers(img, layer_num, params):
                 visualize=(visualizeUnfolding and j == 0), return_helper_surfaces=returnHelperSurfaces)
 
             ## Fold detected lines back to original image shape
-            folded_surfaces = hc.fold_surfaces_back(segmentation_surfaces, zIdx=j ,interpolate=interpolateFoldedSurface)
+            folded_surfaces = hc.fold_surfaces_back(segmentation_surfaces, zIdx=j)
             zstackList.append(folded_surfaces)
             print(f"Layer {i+1}, Zstack {j+1}")
         layersList.append(zstackList)
@@ -171,38 +172,37 @@ def detect3dSlicewiseLayers(img, layer_num, params):
 
 if __name__ == "__main__":
 
-    # I = skimage.io.imread('data/29-2016_29-2016-60kV-resized_z200.tif')
-    I = skimage.io.imread('data/29-2016_29-2016-60kV-resized.tif')
+    I = skimage.io.imread('data/29-2016_29-2016-60kV-resized_z200.tif')
+    # I = skimage.io.imread('data/29-2016_29-2016-60kV-resized.tif')
 
-    visualizeUnfolding = False # if True - visualizes the unfolding process steps
+    visualizeUnfolding = True # if True - visualizes the unfolding process steps
     interpStep = 10/4 # Distance between the interpolated points
     normalLinesRange = 25 # Range (half of the length) of lines normal to interpolation points
-    interpolateFoldedSurface = False  # if True - interpolates unfolded surface to have a value for each x axis pixel
     returnHelperSurfaces = False # if True, returns also dark helper surfaces from surface detection process
     params = [visualizeUnfolding, interpStep, normalLinesRange, 
-        interpolateFoldedSurface, returnHelperSurfaces]
+         returnHelperSurfaces]
 
-    layersList = detect3dSlicewiseLayers(I, 4, params)
+    layersList = detect3dSlicewiseLayers(I, 1, params)
     
-    # plt.figure()
-    # plt.imshow(I[15,:,:], cmap='gray')
-    # for i in range(len(layersList)):
-    #     folded_surfaces = layersList[i][15]
-    #     for j in range(len(folded_surfaces)):
-    #         folded_surface = folded_surfaces[j]
-    #         if j < 2:
-    #             plt.plot(folded_surface[0,:],folded_surface[1,:], 'r')
-    #         else:
-    #             plt.plot(folded_surface[0,:],folded_surface[1,:], 'b')
+    plt.figure()
+    plt.imshow(I[15,:,:], cmap='gray')
+    for i in range(len(layersList)):
+        folded_surfaces = layersList[i][15]
+        for j in range(len(folded_surfaces)):
+            folded_surface = folded_surfaces[j]
+            if j < 2:
+                plt.plot(folded_surface[0,:],folded_surface[1,:], 'r')
+            else:
+                plt.plot(folded_surface[0,:],folded_surface[1,:], 'b')
 
-    # plt.show()
+    plt.show()
 
     segmImg = helpers.layersToMatrix(layersList, I.shape)
 
-    # plt.imshow(segmImg[15,:,:].transpose())
-    # plt.show()
+    plt.imshow(segmImg[15,:,:].transpose())
+    plt.show()
 
-    # surf = helpers.layersToSurface(layersList)
+    surf = helpers.layersToSurface(layersList)
     # surf_array = np.array(surf)
     # np.save("data/slicewise_zXXX_allSurf_raw.npy", surf_array)
 
