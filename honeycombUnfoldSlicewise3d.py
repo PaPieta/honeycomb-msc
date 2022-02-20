@@ -192,63 +192,8 @@ class HoneycombUnfoldSlicewise3d:
                 plt.plot(interp_points[0,:],interp_points[1,:], '*',markersize=1)
             plt.show()
 
-    
+
     def calculate_normals(self,normals_range=30):
-        """Calculate lines normal to the interpolated points with given range.
-        Old, slow version. \n
-        Params:\n
-        normals_range - length range of each normal line (length = 2*range)
-        """
-        if self.lines_interp.size == 0:
-            raise Exception('Interpolated points are not defined')
-        xCount=0
-        zCount=0
-        for i in range(self.lines_interp.shape[1]):
-            # Calculate direction vector for the point
-            if xCount == 0:
-                vec = self.lines_interp[:2,i+1] - self.lines_interp[:2,i]
-            elif xCount == self.interp_x_len-1:
-                vec = self.lines_interp[:2,i] - self.lines_interp[:2,i-1]
-            else:
-                vec = self.lines_interp[:2,i+1] - self.lines_interp[:2,i-1]
-            # Normalize vector
-            vec = vec/np.linalg.norm(vec)
-            # Calculate perpendicular vector
-            per_vec = np.empty_like(vec)
-            per_vec[0] = -vec[1]
-            per_vec[1] = vec[0]
-            # Create 2 points moved by the vector in either direction
-            xy1 = self.lines_interp[:2,i] + normals_range*per_vec
-            xy2 = self.lines_interp[:2,i] - normals_range*per_vec
-            # Add z position
-            xyz1 = np.hstack((xy1,self.lines_interp[2,i]))
-            xyz2 = np.hstack((xy2,self.lines_interp[2,i]))
-            # create normal and add to vector
-            normal = np.array((xyz1,xyz2))
-            self.normals = np.dstack((self.normals,normal))
-            # Update counters
-            xCount+=1
-            if xCount == self.interp_x_len:
-                xCount = 0
-                zCount +=1
-
-        if self.visualize == True:
-            zUnique = np.unique(self.lines_interp[2,:])
-            plt.figure()
-            for i in range(3):
-                # Find interpolated z layer closest to the original image layers
-                zlayer = np.argmin(np.abs(zUnique-self.slice_idx[i]))
-                # Get normals for the layer
-                temp_normals = self.normals[:,0:2,zlayer*self.interp_x_len:(zlayer+1)*self.interp_x_len]
-
-                plt.subplot(1,3,i+1)
-                plt.imshow(self.img[self.slice_idx[i],:,:], cmap='gray')
-                for j in range(temp_normals.shape[2]):
-                    plt.plot(temp_normals[:,0,j],temp_normals[:,1,j], '-',color='k')
-            plt.show()
-
-
-    def calculate_normals2(self,normals_range=30):
         """Calculate lines normal to the interpolated points with given range.\n
         Params:\n
         normals_range - length range of each normal line (length = 2*range)
@@ -334,6 +279,7 @@ class HoneycombUnfoldSlicewise3d:
         self.interp_points = interp_points
 
         normalsMat = np.reshape(self.normals,(2,3,self.interp_z_len,self.interp_x_len))
+        temp_unf_points = np.zeros((3,self.normals.shape[2]*interp_points))
         for i in range(normalsMat.shape[3]):
             surf = normalsMat[:,:,:,i]
             surfFlat = np.reshape(np.moveaxis(surf,0,-1),(3,-1))
@@ -345,19 +291,20 @@ class HoneycombUnfoldSlicewise3d:
             zCol = np.array([np.arange(0,surf.shape[2],surf[0,2,1]-surf[0,2,0])])
             zArr = (zRow+1).transpose()@zCol
             zArr = zArr.transpose().ravel()
-            xArr = np.empty(0)
+            xArr = np.zeros(surf.shape[2]*interp_points)
             
             for j in range(surf.shape[2]):
                 xRow = np.linspace(surf[0,1,j]-0.05,surf[1,1,j]+0.05,interp_points)
-                xArr = np.hstack((xArr,xRow))
+                xArr[j*interp_points:(j+1)*interp_points] = xRow
             xi = np.array((xArr,zArr)).transpose()
             points = np.array((surfFlat[1, :],surfFlat[2, :])).transpose()
             # create interpolation function  x,z,y order
             yArr = scipy.interpolate.griddata(points,surfFlat[0, :], xi)
             halfInterp = np.array((xArr,yArr,zArr))
-            self.unfolding_points = np.hstack((self.unfolding_points,halfInterp))
+            # self.unfolding_points = np.hstack((self.unfolding_points,halfInterp))
+            temp_unf_points[:,i*surf.shape[2]*interp_points:(i+1)*surf.shape[2]*interp_points] = halfInterp
 
-        unf_reshaped = np.reshape(self.unfolding_points,(3,self.interp_x_len,self.interp_z_len,interp_points))
+        unf_reshaped = np.reshape(temp_unf_points,(3,self.interp_x_len,self.interp_z_len,interp_points))
         unf_reshaped = np.reshape(np.swapaxes(unf_reshaped,1,2),(3,-1))
 
         self.unfolding_points = unf_reshaped
@@ -411,12 +358,17 @@ class HoneycombUnfoldSlicewise3d:
             surface = surfaces[i]
             for j in range(surface.shape[0]):
                 # Get point position on original image
-                unfPointsCol = unfolding_points_mat[:,zIdx,j,:]
-                colIdx = np.arange(0,unfPointsCol.shape[1],1)
-                xInterp = scipy.interpolate.interp1d(colIdx, unfPointsCol[0,:])
-                yInterp = scipy.interpolate.interp1d(colIdx, unfPointsCol[1,:])
-                point = np.array([xInterp(surface[j]),yInterp(surface[j])])
-                # point = unfolding_points_mat[:,zIdx,j,surface[j]]
+                if surface[j].is_integer():
+                    point = unfolding_points_mat[:,zIdx,j,int(surface[j])]
+                else:
+                    surfVal = surface[j]
+                    #Edge case
+                    if unfolding_points_mat.shape[3] - surfVal < 1:
+                        p1 = unfolding_points_mat[:,zIdx,j,int(np.floor(surfVal))]
+                    else:
+                        p1 = unfolding_points_mat[:,zIdx,j,int(np.ceil(surfVal))]
+                    p2 = unfolding_points_mat[:,zIdx,j,int(np.floor(surfVal))]
+                    point = p1*(np.ceil(surfVal)-surfVal) + p2*(surfVal-np.floor(surfVal))
                 # Append to surface vec
                 folded_surface = np.hstack((folded_surface,np.expand_dims(point,axis=1)))
             folded_surfaces.append(folded_surface)
