@@ -229,18 +229,6 @@ def getSurfUniformSpacing(surf_array, zPoints=200, xPoints=200):
         surf_array_X[1,:,i] = yn
         surf_array_X[2,:,i] = zn
 
-    # # Fill y values with more accurate data
-    # xArrFlat = surf_array_X[0,:,:].ravel()
-    # zArrFlat = surf_array_X[2,:,:].ravel()
-
-    # xi = np.array((xArrFlat,zArrFlat)).transpose()
-
-    # points = np.array((surf_array[0,:,:].ravel(),surf_array[2,:,:].ravel())).transpose()
-    # yArrFlat = scipy.interpolate.griddata(points,surf_array[1,:,:].ravel(), xi)
-
-    # yArr = yArrFlat.reshape(surf_array_X[0,:,:].shape)
-    # surf_array_X[1,:,:] = yArr
-
     # Z Axis
     zMin = np.max(np.min(surf_array_X[2,:,:],axis=1))
     zMax = np.min(np.max(surf_array_X[2,:,:],axis=1))
@@ -274,17 +262,103 @@ def getSurfUniformSpacing(surf_array, zPoints=200, xPoints=200):
         surf_array_Z[1,i,:] = yn
         surf_array_Z[2,i,:] = zn
 
-    # Fill y values with more accurate data
-    # xArrFlat = surf_array_Z[0,:,:].ravel()
-    # zArrFlat = surf_array_Z[2,:,:].ravel()
+    return surf_array_Z
 
-    # xi = np.array((xArrFlat,zArrFlat)).transpose()
+def getLinesUniformInterpSpacing(lines_list, zStep=1, xStep=1):
+    """Defines a uniform (in relation to surface curve) x,z axis spacing 
+    based on a 1st order spline fitted to the provided list of points.\n
+    Params:\n
+    surf_array - 3d array with a surface (3,xNum,zNum)\n
+    step - interpolation step\n
+    """
+    # https://stackoverflow.com/questions/19117660/how-to-generate-equispaced-interpolating-values
+    
 
-    # points = np.array((surf_array_X[0,:,:].ravel(),surf_array_X[2,:,:].ravel())).transpose()
-    # yArrFlat = scipy.interpolate.griddata(points,surf_array_X[1,:,:].ravel(), xi)
+    # X Axis
+    #Find min max
+    minArr = []
+    maxArr = []
+    for i in range(len(lines_list)):
+        minArr.append(np.min(lines_list[i][0,:]))
+        maxArr.append(np.max(lines_list[i][0,:]))
+    xMin = np.max(np.array(minArr))
+    xMax = np.min(np.array(maxArr))
+    # First loop to estimate number of interpolation points
+    lengthList = []
+    for i in range(len(lines_list)):
+        points = lines_list[i]
+        #Remove repetitions
+        points = np.unique(points,axis=1)
+        # Sort the points by X axis
+        points = points[:,np.argsort(points[0,:])]
+        # Calculate spline for the final step and equally starting example values
+        ySpl = UnivariateSpline(points[0,:], points[1,:], k=1, s=0)
+        x = np.arange(xMin, xMax, xStep)
+        y = ySpl(x)
+        xd = np.diff(x)
+        yd = np.diff(y)
+        dist = np.sqrt(xd**2+yd**2)
+        u = np.cumsum(dist)
+        u = np.hstack([[0],u])
+        # Interpolate the x-coordinates independently with respect to the new coordinates.
+        t = np.arange(0,u.max(),xStep)
+        lengthList.append(t.shape[0])
+    
+    xPoints = int(np.round(np.mean(np.array(lengthList))))
+    # Second "proper" loop
+    surf_array_X = np.zeros((3,xPoints,len(lines_list)))
+    for i in range(len(lines_list)):
+        points = lines_list[i]
+        #Remove repetitions
+        points = np.unique(points,axis=1)
+        # Sort the points by X axis
+        points = points[:,np.argsort(points[0,:])]
+        # Calculate spline for the final step and equally starting example values
+        ySpl = UnivariateSpline(points[0,:], points[1,:], k=1, s=0)
+        zSpl = UnivariateSpline(points[0,:], points[2,:], k=1, s=0)
+        # ySpl = scipy.interpolate.interp1d(points[0,:], points[1,:])
+        # zSpl = scipy.interpolate.interp1d(points[0,:], points[2,:])
+        x = np.arange(xMin, xMax, xStep)
+        y = ySpl(x)
+        # Calculate all all distances between the points 
+        # and generate the coordinates on the curve by cumulative summing.
+        xd = np.diff(x)
+        yd = np.diff(y)
+        dist = np.sqrt(xd**2+yd**2)
+        u = np.cumsum(dist)
+        u = np.hstack([[0],u])
+        # Interpolate the x-coordinates independently with respect to the new coordinates.
+        t = np.linspace(0,u.max(),xPoints)
+        xn = np.interp(t, u, x)
+        yn = np.interp(t, u, y)
+        zn = zSpl(xn)
+        surf_array_X[0,:,i] = xn
+        surf_array_X[1,:,i] = yn
+        surf_array_X[2,:,i] = zn
 
-    # yArr = yArrFlat.reshape(surf_array_Z[0,:,:].shape)
-    # surf_array_Z[1,:,:] = yArr
+    # Z Axis
+    zMin = np.max(np.min(surf_array_X[2,:,:],axis=1))
+    zMax = np.min(np.max(surf_array_X[2,:,:],axis=1))
+    # TODO: fix so that +1 is not needed
+    zPoints = np.arange(zMin, zMax+1, zStep).shape[0]
+    surf_array_Z = np.zeros((3,surf_array_X.shape[1],zPoints))
+    for i in range(surf_array_X.shape[1]):
+        points = surf_array_X[:,i,:]
+        #Remove repetitions
+        points = np.unique(points,axis=1)
+        # Sort the points by Z axis
+        points = points[:,np.argsort(points[2,:])]
+        # Calculate spline for the final step and equally starting example values
+        ySpl = UnivariateSpline(points[2,:], points[1,:], k=1, s=0)
+        xSpl = UnivariateSpline(points[2,:], points[0,:], k=1, s=0)
+        # ySpl = scipy.interpolate.interp1d(points[2,:], points[1,:])
+        # xSpl = scipy.interpolate.interp1d(points[2,:], points[0,:])
+        z = np.arange(zMin, zMax+1, zStep)
+        y = ySpl(z)
+        x = xSpl(z)
+        surf_array_Z[0,i,:] = x
+        surf_array_Z[1,i,:] = y
+        surf_array_Z[2,i,:] = z
 
     return surf_array_Z
 

@@ -108,42 +108,16 @@ class HoneycombUnfoldSlicewise3d:
         if len(self.lines) == 0:
             raise Exception('No lines are defined. Define the line first with draw_line')
 
-        x_low_list = []
-        x_high_list = []
-        linesArray = np.empty((3,0))
-        for i in range(len(self.lines)):
-            linesArray = np.hstack((linesArray,self.lines[i]))
-            x_low_list.append(np.min(self.lines[i][0,:]))
-            x_high_list.append(np.max(self.lines[i][0,:]))
-
-        x_low = np.max(np.array(x_low_list))
-        x_high = np.min(np.array(x_high_list))
-        
-        # we want to get y values based on x and z
-        # Define interpolation points and get y values
+        #For visualization
         zUnique = np.arange(0,self.img_shape[0],1) # !!!!!!!Warning changed Z step to be always 1
+        # TODO: Think about possibly moving this function here
+        interpMat = helpers.getLinesUniformInterpSpacing(self.lines, zStep=1, xStep=step)
 
-        xnew = np.empty(0)
-        znew = np.empty(0)
+        self.lines_interp = np.moveaxis(interpMat,1,-1).reshape(3,-1)
 
-        lines2d = linesArray[:2,:]
-        # lines2d = np.moveaxis(lines2d, 0, -1).reshape(2,-1)
-        xtemp = helpers.getFuncUniformSpacing(lines2d, x_low, x_high, step, self.visualize)
-
-        for i in range(zUnique.shape[0]):
-            ztemp = np.full(xtemp.shape[0],zUnique[i])
-
-            xnew = np.hstack((xnew,xtemp))
-            znew = np.hstack((znew,ztemp))
-        # save for calculating normals
-        self.interp_x_len = xtemp.shape[0]
-        self.interp_z_len = zUnique.shape[0]
-
-        xi = np.array((xnew,znew)).transpose()
-        points = np.array((linesArray[0, :],linesArray[2, :])).transpose()
-        # create interpolation function  x,z,y order
-        ynew = scipy.interpolate.griddata(points,linesArray[1, :], xi)
-        self.lines_interp = np.array((xnew,ynew,znew))
+        # # save for calculating normals
+        self.interp_x_len = interpMat.shape[1]
+        self.interp_z_len = interpMat.shape[2]
 
 
         if self.visualize == True:

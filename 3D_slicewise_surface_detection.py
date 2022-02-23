@@ -30,7 +30,7 @@ def unfoldedHoneycombSurfDetect(unfolded_img, honeycombCost,  visualize=False, r
     return_helper_surfaces - if True, returns also dark helper surfaces.
     """
     # Layered surface detection parameters - hidden, they don't need to be changed
-    darkSurfacesWeight = 2000 # weight of dark surfaces cost 
+    darkSurfacesWeight = 300 # weight of dark surfaces cost 
     smoothness = [2,1] # honeycomb edge and dark surface smoothness term 
     honeycombSurfacesMargin = [6, 25] # min, max distance margin between the honeycomb edges
     darkSurfacesMargin = [12, 35] # min, max distance margin between the dark helper surfaces
@@ -183,41 +183,42 @@ if __name__ == "__main__":
     # I = skimage.io.imread('data/29-2016_29-2016-60kV-resized.tif')
     I = skimage.io.imread('data/29-2016_29-2016-60kV-zoom-center_recon.tif')
 
-    I = I[250:750,:,:]
-    # I = I[670:675,:,:]
-    # I = I[250:255,:,:]
+    I = I[200:780,:,:]
+    # I = I[770:780,:,:]
+    # I = I[200:215,:,:]
+
 
     # I_2d = I[200,:,:]
 
     visualizeUnfolding = False # if True - visualizes the unfolding process steps
     interpStep = 10/4 # Distance between the interpolated points
-    normalLinesRange = 35 # Range (half of the length) of lines normal to interpolation points
+    normalLinesRange = 40 # Range (half of the length) of lines normal to interpolation points
     returnHelperSurfaces = False # if True, returns also dark helper surfaces from surface detection process
     params = [visualizeUnfolding, interpStep, normalLinesRange, 
          returnHelperSurfaces]
 
     layersList = detect3dSlicewiseLayers(I, 4, params)
     
-    # plt.figure()
-    # plt.imshow(I[15,:,:], cmap='gray')
-    # for i in range(len(layersList)):
-    #     folded_surfaces = layersList[i][15]
-    #     for j in range(len(folded_surfaces)):
-    #         folded_surface = folded_surfaces[j]
-    #         if j < 2:
-    #             plt.plot(folded_surface[0,:],folded_surface[1,:], 'r')
-    #         else:
-    #             plt.plot(folded_surface[0,:],folded_surface[1,:], 'b')
+    plt.figure()
+    plt.imshow(I[15,:,:], cmap='gray')
+    for i in range(len(layersList)):
+        folded_surfaces = layersList[i][15]
+        for j in range(len(folded_surfaces)):
+            folded_surface = folded_surfaces[j]
+            if j < 2:
+                plt.plot(folded_surface[0,:],folded_surface[1,:], 'r')
+            else:
+                plt.plot(folded_surface[0,:],folded_surface[1,:], 'b')
 
-    # plt.show()
+    plt.show()
 
     segmImg = helpers.layersToMatrix(layersList, I.shape)
 
-    # plt.imshow(segmImg[15,:,:].transpose())
-    # plt.show()
+    plt.imshow(segmImg[15,:,:].transpose())
+    plt.show()
 
     surf = helpers.layersToSurface(layersList)
     surf_array = np.array(surf)
-    np.save("data/slicewise_z250-750_allSurf_raw3.npy", surf_array)
+    np.save("data/slicewise_z200-780_allSurf_raw.npy", surf_array)
 
     # vwl.save_multSurf2vtk('data/surfaces/slicewise_z200New_allSurf.vtk', surf)
