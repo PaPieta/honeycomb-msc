@@ -48,9 +48,9 @@ class HoneycombUnfoldSlicewise3d:
         self.slice_idx = [0, int(self.img_shape[0]/2), self.img_shape[0]-1]
 
         self.lines = []
-        self.lines_interp = np.empty((2,0))
+        self.lines_interp = np.empty((3,0,0))
         self.normals = np.empty((2,3,0))
-        self.unfolding_points = np.empty((3,0))
+        self.unfolding_points = np.empty((3,0,0,0))
 
         self.interp_points = 0
         self.interp_x_len = 0
@@ -111,13 +111,11 @@ class HoneycombUnfoldSlicewise3d:
         #For visualization
         zUnique = np.arange(0,self.img_shape[0],1) # !!!!!!!Warning changed Z step to be always 1
         # TODO: Think about possibly moving this function here
-        interpMat = helpers.getLinesUniformInterpSpacing(self.lines, zStep=1, xStep=step)
-
-        self.lines_interp = np.moveaxis(interpMat,1,-1).reshape(3,-1)
+        self.lines_interp = helpers.getLinesUniformInterpSpacing(self.lines, zStep=1, xStep=step)
 
         # # save for calculating normals
-        self.interp_x_len = interpMat.shape[1]
-        self.interp_z_len = interpMat.shape[2]
+        self.interp_x_len = self.lines_interp.shape[1]
+        self.interp_z_len = self.lines_interp.shape[2]
 
 
         if self.visualize == True:
@@ -126,7 +124,7 @@ class HoneycombUnfoldSlicewise3d:
                 # Find interpolated z layer closest to the original image layers
                 zlayer = np.argmin(np.abs(zUnique-self.slice_idx[i]))
                 # Get points for the layer
-                interp_points = self.lines_interp[0:2,zlayer*self.interp_x_len:(zlayer+1)*self.interp_x_len]
+                interp_points = self.lines_interp[0:2,:,zlayer]
 
                 plt.subplot(1,3,i+1)
                 plt.imshow(self.img[self.slice_idx[i],:,:], cmap='gray')
@@ -141,16 +139,9 @@ class HoneycombUnfoldSlicewise3d:
         if self.lines_interp.size == 0:
             raise Exception('Interpolated points are not defined')
         # Pass x and y through gaussian smoothing filter
-        x_smooth = np.empty(0)
-        y_smooth = np.empty(0)
         for i in range(self.interp_z_len):
-            start = i*self.interp_x_len
-            end = (i+1)*self.interp_x_len
-            x_temp = scp.gaussian_filter1d(self.lines_interp[0,start:end],2)
-            y_temp = scp.gaussian_filter1d(self.lines_interp[1,start:end],2)
-            x_smooth = np.hstack((x_smooth,x_temp))
-            y_smooth = np.hstack((y_smooth,y_temp))
-        self.lines_interp = np.array([x_smooth,y_smooth,self.lines_interp[2,:]])
+            self.lines_interp[0,:,i] = scp.gaussian_filter1d(self.lines_interp[0,:,i],2)
+            self.lines_interp[1,:,i] = scp.gaussian_filter1d(self.lines_interp[1,:,i],2)
 
         if self.visualize == True:
             zUnique = np.unique(self.lines_interp[2,:])
@@ -159,7 +150,7 @@ class HoneycombUnfoldSlicewise3d:
                 # Find interpolated z layer closest to the original image layers
                 zlayer = np.argmin(np.abs(zUnique-self.slice_idx[i]))
                 # Get points for the layer
-                interp_points = self.lines_interp[0:2,zlayer*self.interp_x_len:(zlayer+1)*self.interp_x_len]
+                interp_points = self.lines_interp[0:2,:,zlayer]
 
                 plt.subplot(1,3,i+1)
                 plt.imshow(self.img[self.slice_idx[i],:,:], cmap='gray')
@@ -175,17 +166,15 @@ class HoneycombUnfoldSlicewise3d:
         if self.lines_interp.size == 0:
             raise Exception('Interpolated points are not defined')
 
-        # Get matrix from the list
-        linesInterpMat = np.reshape(self.lines_interp,(3,self.interp_z_len,self.interp_x_len))
         # Take only x y values
-        linesInterpMat2d = linesInterpMat[:2,:,:]
+        lines_interp_xy = self.lines_interp[:2,:,:]
         # Create matrix of vectors
-        vecMat = np.zeros_like(linesInterpMat2d)
+        vecMat = np.zeros_like(lines_interp_xy)
         # Fill central values
-        vecMat[:,:,1:-1] = linesInterpMat2d[:,:,2:] - linesInterpMat2d[:,:,:-2]
+        vecMat[:,1:-1,:] = lines_interp_xy[:,2:,:] - lines_interp_xy[:,:-2,:]
         # Fill first and last column 
-        vecMat[:,:,0] = linesInterpMat2d[:,:,1] - linesInterpMat2d[:,:,0]
-        vecMat[:,:,-1] = linesInterpMat2d[:,:,-1] - linesInterpMat2d[:,:,-2]
+        vecMat[:,0,:] = lines_interp_xy[:,1,:] - lines_interp_xy[:,0,:]
+        vecMat[:,-1,:] = lines_interp_xy[:,-1,:] - lines_interp_xy[:,-2,:]
         # Normalize
         vecMat = vecMat/np.apply_along_axis(np.linalg.norm,0,vecMat)
         # Calculate perpendicular vector
@@ -193,14 +182,13 @@ class HoneycombUnfoldSlicewise3d:
         perVecMat[0,:,:] = -vecMat[1,:,:]
         perVecMat[1,:,:] = vecMat[0,:,:]
         # Calculate points movec by vector in both directions
-        normP1 = linesInterpMat2d + perVecMat*normals_range
-        normP2 = linesInterpMat2d - perVecMat*normals_range
+        normP1 = lines_interp_xy - perVecMat*normals_range
+        normP2 = lines_interp_xy + perVecMat*normals_range
         # Include z axis position
-        normP1 = np.vstack((normP1,np.array([linesInterpMat[2,:,:]])))
-        normP2 = np.vstack((normP2,np.array([linesInterpMat[2,:,:]])))
+        normP1 = np.vstack((normP1,np.array([self.lines_interp[2,:,:]])))
+        normP2 = np.vstack((normP2,np.array([self.lines_interp[2,:,:]])))
         # Combine points
-        normalLines = np.array([normP1,normP2])
-        self.normals = np.reshape(normalLines,(2,3,-1))
+        self.normals = np.array([normP1,normP2])
 
         if self.visualize == True:
             zUnique = np.unique(self.lines_interp[2,:])
@@ -209,7 +197,7 @@ class HoneycombUnfoldSlicewise3d:
                 # Find interpolated z layer closest to the original image layers
                 zlayer = np.argmin(np.abs(zUnique-self.slice_idx[i]))
                 # Get normals for the layer
-                temp_normals = self.normals[:,0:2,zlayer*self.interp_x_len:(zlayer+1)*self.interp_x_len]
+                temp_normals = self.normals[:,0:2,:,zlayer]
 
                 plt.subplot(1,3,i+1)
                 plt.imshow(self.img[self.slice_idx[i],:,:], cmap='gray')
@@ -252,10 +240,12 @@ class HoneycombUnfoldSlicewise3d:
 
         self.interp_points = interp_points
 
-        normalsMat = np.reshape(self.normals,(2,3,self.interp_z_len,self.interp_x_len))
-        temp_unf_points = np.zeros((3,self.normals.shape[2]*interp_points))
-        for i in range(normalsMat.shape[3]):
-            surf = normalsMat[:,:,:,i]
+        # normalsMat = np.reshape(self.normals,(2,3,self.interp_z_len,self.interp_x_len))
+        temp_unf_points = np.zeros((3,self.normals.shape[2]*self.normals.shape[3]*interp_points))
+        # Z, Y, X shape in order to fit original image definition
+        self.unfolding_points = np.zeros((3,self.normals.shape[3],interp_points,self.normals.shape[2]))
+        for i in range(self.normals.shape[2]):
+            surf = self.normals[:,:,i,:]
             surfFlat = np.reshape(np.moveaxis(surf,0,-1),(3,-1))
             # halfSurf1 = fullSurf[:,:,:self.slice_idx[1]]
             # halfSurf2 = fullSurf[:,:,self.slice_idx[1]+1:]
@@ -264,24 +254,36 @@ class HoneycombUnfoldSlicewise3d:
             zRow = np.array([np.linspace(surf[0,2,0],surf[1,2,0],interp_points)])
             zCol = np.array([np.arange(0,surf.shape[2],surf[0,2,1]-surf[0,2,0])])
             zArr = (zRow+1).transpose()@zCol
-            zArr = zArr.transpose().ravel()
-            xArr = np.zeros(surf.shape[2]*interp_points)
+            zArr = zArr.ravel()
+            xArr = np.zeros((interp_points,surf.shape[2]))
             
             for j in range(surf.shape[2]):
-                xRow = np.linspace(surf[0,1,j]-0.05,surf[1,1,j]+0.05,interp_points)
-                xArr[j*interp_points:(j+1)*interp_points] = xRow
+                x1 = surf[0,0,j]
+                x2 = surf[1,0,j]
+                if x1<x2:
+                    x1 = x1 + 0.01
+                    x2 = x2 - 0.01
+                else:
+                    x1 = x1 - 0.01
+                    x2 = x2 + 0.01
+                xArr[:,j] = np.linspace(x1,x2,interp_points)
+                # xArr[j*interp_points:(j+1)*interp_points] = xRow
+            xArr = xArr.ravel()
             xi = np.array((xArr,zArr)).transpose()
-            points = np.array((surfFlat[1, :],surfFlat[2, :])).transpose()
+            points = np.array((surfFlat[0, :],surfFlat[2, :])).transpose()
             # create interpolation function  x,z,y order
-            yArr = scipy.interpolate.griddata(points,surfFlat[0, :], xi)
-            halfInterp = np.array((xArr,yArr,zArr))
+            yArr = scipy.interpolate.griddata(points,surfFlat[1, :], xi)
+            interpSurf = np.array((xArr,yArr,zArr)).reshape(3,interp_points,zCol.shape[1])
             # self.unfolding_points = np.hstack((self.unfolding_points,halfInterp))
-            temp_unf_points[:,i*surf.shape[2]*interp_points:(i+1)*surf.shape[2]*interp_points] = halfInterp
+            # temp_unf_points[:,i*surf.shape[2]*interp_points:(i+1)*surf.shape[2]*interp_points] = interpSurf
 
-        unf_reshaped = np.reshape(temp_unf_points,(3,self.interp_x_len,self.interp_z_len,interp_points))
-        unf_reshaped = np.reshape(np.swapaxes(unf_reshaped,1,2),(3,-1))
+            # Swap from YZ to ZY and assign
+            self.unfolding_points[:,:,:,i] = np.swapaxes(interpSurf,1,2)
 
-        self.unfolding_points = unf_reshaped
+        # unf_reshaped = np.reshape(temp_unf_points,(3,self.interp_x_len,self.interp_z_len,interp_points))
+        # unf_reshaped = np.reshape(np.swapaxes(unf_reshaped,1,2),(3,-1))
+
+        # self.unfolding_points = unf_reshaped
 
 
     def unfold_image(self):
@@ -291,14 +293,16 @@ class HoneycombUnfoldSlicewise3d:
         if self.unfolding_points.shape[1] == 0:
             raise Exception('Unfolding points are not defined')
 
-        x = np.linspace(0,self.img_shape[1]-1,self.img_shape[1])
-        y = np.linspace(0,self.img_shape[2]-1,self.img_shape[2])
+        y = np.linspace(0,self.img_shape[1]-1,self.img_shape[1])
+        x = np.linspace(0,self.img_shape[2]-1,self.img_shape[2])
         z = np.linspace(0,self.img_shape[0]-1,self.img_shape[0])
-        img_interp = scipy.interpolate.RegularGridInterpolator((z, x, y), self.img, method='linear')
-        temp_unf_points = np.swapaxes(self.unfolding_points,0,1)[:,[2,0,1]]
+        img_interp = scipy.interpolate.RegularGridInterpolator((z, y, x), self.img, method='linear')
+        # Flatten unfolding points to 3,-1, swap to -1,3 and change order from xyz to zyx
+        temp_unf_points = np.swapaxes(self.unfolding_points.reshape(3,-1),0,1)[:,[2,1,0]]
+        # temp_unf_points = np.swapaxes(self.unfolding_points,0,1)[:,[2,0,1]]
         unfolded_img = img_interp(temp_unf_points)
-        unfolded_img = unfolded_img.reshape((self.interp_z_len, self.interp_x_len,self.interp_points))
-        unfolded_img = np.swapaxes(unfolded_img, 1, 2)
+        unfolded_img = unfolded_img.reshape((self.interp_z_len, self.interp_points, self.interp_x_len))
+        # unfolded_img = np.swapaxes(unfolded_img, 1, 2)
 
         if self.visualize == True:
             zUnique = np.unique(self.lines_interp[2,:])
@@ -324,8 +328,9 @@ class HoneycombUnfoldSlicewise3d:
             raise Exception('Unfolding points are not defined')
         # Create "coordinate image" out of normals unfolding points
         # temp_unf_points = np.swapaxes(self.unfolding_points,0,1)
-        temp_unf_points = self.unfolding_points[[1,0],:]
-        unfolding_points_mat = temp_unf_points.reshape(2,self.interp_z_len,self.interp_x_len,self.interp_points)
+        # temp_unf_points = self.unfolding_points[[1,0],:]
+        # unfolding_points_mat = temp_unf_points.reshape(2,self.interp_z_len,self.interp_x_len,self.interp_points)
+        unfolding_points_yx = self.unfolding_points[[0,1],:,:]
         folded_surfaces = []
         for i in range(len(surfaces)):
             folded_surface = np.empty((2,0))
@@ -333,15 +338,15 @@ class HoneycombUnfoldSlicewise3d:
             for j in range(surface.shape[0]):
                 # Get point position on original image
                 if surface[j].is_integer():
-                    point = unfolding_points_mat[:,zIdx,j,int(surface[j])]
+                    point = unfolding_points_yx[:,zIdx,int(surface[j]),j]
                 else:
                     surfVal = surface[j]
                     #Edge case
-                    if unfolding_points_mat.shape[3] - surfVal < 1:
-                        p1 = unfolding_points_mat[:,zIdx,j,int(np.floor(surfVal))]
+                    if unfolding_points_yx.shape[2] - surfVal < 1:
+                        p1 = unfolding_points_yx[:,zIdx,int(np.floor(surfVal)),j]
                     else:
-                        p1 = unfolding_points_mat[:,zIdx,j,int(np.ceil(surfVal))]
-                    p2 = unfolding_points_mat[:,zIdx,j,int(np.floor(surfVal))]
+                        p1 = unfolding_points_yx[:,zIdx,int(np.ceil(surfVal)),j]
+                    p2 = unfolding_points_yx[:,zIdx,int(np.floor(surfVal)),j]
                     point = p1*(np.ceil(surfVal)-surfVal) + p2*(surfVal-np.floor(surfVal))
                 # Append to surface vec
                 folded_surface = np.hstack((folded_surface,np.expand_dims(point,axis=1)))

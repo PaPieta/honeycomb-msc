@@ -287,7 +287,7 @@ if __name__ == "__main__":
     for i in range(int(len(surf_array_list)/2)):
         surf2_array = np.array([surf_array_list[i*2],surf_array_list[(i*2)+1]])
         surf2_array = surf2_array[:,:,:,70:]
-        [surf2_array, shell_array] = surf_to_shell_interp(surf2_array,step=[12,12],sigma=2,pixel_size=pixelSize,return_surf=True)
+        [surf2_array, shell_array] = surf_to_shell_interp(surf2_array,step=[3,3],sigma=2,pixel_size=pixelSize,return_surf=True)
         # shell_array = surf_to_shell_simple(surf2_array)
         shell_array_list.append(shell_array)
         surf_array_list[i*2] = surf2_array[0,:,:,:]
@@ -299,11 +299,11 @@ if __name__ == "__main__":
         plt.colorbar()
     plt.show()
 
-    vwl.save_multSurf2vtk('data/surfaces/slicewise_z200-780_12_resized.vtk', surf_array_list)
-    vwl.save_multSurf2vtk('data/surfaces/slicewise_z200-780_12_center_resized.vtk', shell_array_list)
+    # vwl.save_multSurf2vtk('data/surfaces/slicewise_z200-780_12_resized.vtk', surf_array_list)
+    # vwl.save_multSurf2vtk('data/surfaces/slicewise_z200-780_12_center_resized.vtk', shell_array_list)
 
-    partFilePath = "data/abaqusShells/dummyPart.inp"
-    masterFilePath = "data/abaqusShells/dummyMaster.inp"
-    savePath = "data/abaqusShells/H29_slicewise_z200-780_4x/"
+    # partFilePath = "data/abaqusShells/dummyPart.inp"
+    # masterFilePath = "data/abaqusShells/dummyMaster.inp"
+    # savePath = "data/abaqusShells/H29_slicewise_z200-780_4x/"
 
-    fem_model_shell_list(shell_array_list, partFilePath, masterFilePath, savePath)
+    # fem_model_shell_list(shell_array_list, partFilePath, masterFilePath, savePath)
