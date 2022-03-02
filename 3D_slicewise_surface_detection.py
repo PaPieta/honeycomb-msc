@@ -183,26 +183,26 @@ if __name__ == "__main__":
     # I = skimage.io.imread('data/29-2016_29-2016-60kV-resized.tif')
     I = skimage.io.imread('data/29-2016_29-2016-60kV-zoom-center_recon.tif')
 
-    I = I[200:780,:,:]
+    I = I[200:215,:,:]
     # I = I[770:780,:,:]
-    # I = I[200:215,:,:]
+    # I = I[0:15,:,:]
 
 
     # I_2d = I[200,:,:]
 
-    visualizeUnfolding = False # if True - visualizes the unfolding process steps
+    visualizeUnfolding = True # if True - visualizes the unfolding process steps
     interpStep = 10/4 # Distance between the interpolated points
     normalLinesRange = 40 # Range (half of the length) of lines normal to interpolation points
     returnHelperSurfaces = False # if True, returns also dark helper surfaces from surface detection process
     params = [visualizeUnfolding, interpStep, normalLinesRange, 
          returnHelperSurfaces]
 
-    layersList = detect3dSlicewiseLayers(I, 4, params)
+    layersList = detect3dSlicewiseLayers(I, 1, params)
     
     plt.figure()
-    plt.imshow(I[15,:,:], cmap='gray')
+    plt.imshow(I[1,:,:], cmap='gray')
     for i in range(len(layersList)):
-        folded_surfaces = layersList[i][15]
+        folded_surfaces = layersList[i][1]
         for j in range(len(folded_surfaces)):
             folded_surface = folded_surfaces[j]
             if j < 2:

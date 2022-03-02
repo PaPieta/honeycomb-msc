@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import scipy.stats as stats
 from sklearn.mixture import GaussianMixture
 from scipy.interpolate import UnivariateSpline
+from scipy.interpolate import RegularGridInterpolator
 import scipy.interpolate
 
 
@@ -258,6 +259,203 @@ def getSurfUniformSpacing(surf_array, zPoints=200, xPoints=200):
         zn = np.interp(t, u, z)
         xn = xSpl(zn)
         yn = np.interp(t, u, y)
+        surf_array_Z[0,i,:] = xn
+        surf_array_Z[1,i,:] = yn
+        surf_array_Z[2,i,:] = zn
+
+    return surf_array_Z
+
+
+def getMultSurfUniformSpacing2(mult_surf_array, zStep=3, xStep=3):
+    """Defines a uniform (in relation to surface curve) x,z axis spacing 
+    based on a 1st order spline fitted to the provided points.\n
+    Params:\n
+    surf_array - 4d array with surfaces (surfNum,3,xNum,zNum)\n
+    step - interpolation step\n
+    """
+    # https://stackoverflow.com/questions/19117660/how-to-generate-equispaced-interpolating-values
+    
+
+    # Sort by x axis
+    for i in range(mult_surf_array.shape[0]):
+        surf_array = mult_surf_array[i,:,:,:]
+        sort_idx = np.argsort(surf_array[0,:,:],axis=0)
+        sort_idx_mat = np.array([sort_idx,sort_idx,sort_idx])
+        surf_array = np.take_along_axis(surf_array, sort_idx_mat, axis=1)
+        mult_surf_array[i,:,:,:] = surf_array
+    ### X Axis
+    edge1Val = np.max(np.min(mult_surf_array[:,0,:,:],axis=1))
+    edge2Val = np.min(np.max(mult_surf_array[:,0,:,:],axis=1))
+
+    # Cumulative distance calculation
+    xd = np.diff(mult_surf_array[:,0,:,:],axis=1)
+    yd = np.diff(mult_surf_array[:,1,:,:],axis=1)
+    distMat = np.sqrt(xd**2+yd**2)
+    u = np.cumsum(distMat, axis=1)
+    # Find row with smallest distance
+    minDist = np.min(np.sum(distMat, axis=1))
+    # Define corrrect number of t points with regards to min dist
+    tPoints = int(np.round(minDist/xStep))
+
+    mult_surf_array_X = np.zeros((mult_surf_array.shape[0],3,tPoints,mult_surf_array.shape[3]))
+    for j in range(mult_surf_array.shape[0]):
+        surf_array = mult_surf_array[j,:,:,:]
+        for i in range(surf_array.shape[2]):
+            points = surf_array[:,:,i]
+            #Remove repetitions
+            points = np.unique(points,axis=1)
+            # Sort the points by X axis
+            points = points[:,np.argsort(points[0,:])]
+            # Calculate spline for the final step and equally starting example values
+            zSpl = UnivariateSpline(points[0,:], points[2,:], k=1, s=0)
+            ySpl = UnivariateSpline(points[0,:], points[1,:], k=1, s=0)
+            x = np.linspace(edge1Val, edge2Val, tPoints)
+            y = ySpl(x)
+            # Calculate all all distances between the points 
+            # and generate the coordinates on the curve by cumulative summing.
+            xd = np.diff(x)
+            yd = np.diff(y)
+            dist = np.sqrt(xd**2+yd**2)
+            u = np.cumsum(dist)
+            u = np.hstack([[0],u])
+            # Interpolate the x-coordinates independently with respect to the new coordinates.
+            t = np.linspace(0,u.max(),tPoints)
+            xn = np.interp(t, u, x)
+            yn = np.interp(t, u, y)
+            zn = zSpl(xn)
+            mult_surf_array_X[j,0,:,i] = xn
+            mult_surf_array_X[j,1,:,i] = yn
+            mult_surf_array_X[j,2,:,i] = zn
+
+    ### Z Axis
+    edge1Val = np.max(np.min(mult_surf_array_X[:,2,:,:],axis=2))
+    edge2Val = np.min(np.max(mult_surf_array_X[:,2,:,:],axis=2))
+    # Cumulative distance calculation
+    zd = np.diff(mult_surf_array_X[:,2,:,:],axis=2)
+    yd = np.diff(mult_surf_array_X[:,1,:,:],axis=2)
+    distMat = np.sqrt(zd**2+yd**2)
+    u = np.cumsum(distMat, axis=2)
+    # Find row with smallest distance
+    minDist = np.min(np.sum(distMat, axis=2))
+    # Define corrrect number of t points with regards to min dist
+    tPoints = int(np.round(minDist/zStep))
+
+    mult_surf_array_Z = np.zeros((mult_surf_array_X.shape[0],3,mult_surf_array_X.shape[2],tPoints))
+    for j in range(mult_surf_array_X.shape[0]):
+        surf_array = mult_surf_array_X[j,:,:,:]
+        for i in range(surf_array.shape[1]):
+            points = surf_array[:,i,:]
+            #Remove repetitions
+            points = np.unique(points,axis=1)
+            # Sort the points by Z axis
+            points = points[:,np.argsort(points[2,:])]
+            # Calculate spline for the final step and equally starting example values
+            ySpl = UnivariateSpline(points[2,:], points[1,:], k=1, s=0)
+            xSpl = UnivariateSpline(points[2,:], points[0,:], k=1, s=0)
+            # ySpl = scipy.interpolate.interp1d(points[2,:], points[1,:])
+            # xSpl = scipy.interpolate.interp1d(points[2,:], points[0,:])
+            z = np.linspace(edge1Val, edge2Val, tPoints)
+            y = ySpl(z)
+            # Calculate all all distances between the points 
+            # and generate the coordinates on the curve by cumulative summing.
+            zd = np.diff(z)
+            yd = np.diff(y)
+            dist = np.sqrt(zd**2+yd**2)
+            u = np.cumsum(dist)
+            u = np.hstack([[0],u])
+            # Interpolate the x-coordinates independently with respect to the new coordinates.
+            t = np.linspace(0,u.max(),tPoints)
+            zn = np.interp(t, u, z)
+            xn = xSpl(zn)
+            yn = np.interp(t, u, y)
+            mult_surf_array_Z[j,0,i,:] = xn
+            mult_surf_array_Z[j,1,i,:] = yn
+            mult_surf_array_Z[j,2,i,:] = zn
+
+    return mult_surf_array_Z
+
+def getSurfUniformSpacing2(surf_array, zStep=3, xStep=3):
+    """Defines a uniform (in relation to surface curve) x,z axis spacing 
+    based on a 1st order spline fitted to the provided points.\n
+    Params:\n
+    surf_array - 3d array with a surface (3,xNum,zNum)\n
+    step - interpolation step\n
+    """
+    # https://stackoverflow.com/questions/19117660/how-to-generate-equispaced-interpolating-values
+    
+
+    # Sort by x axis
+    sort_idx = np.argsort(surf_array[0,:,:],axis=0)
+    sort_idx_mat = np.array([sort_idx,sort_idx,sort_idx])
+    surf_array = np.take_along_axis(surf_array, sort_idx_mat, axis=1)
+    ### X Axis
+    xd = np.diff(surf_array[0,:,:],axis=0)
+    yd = np.diff(surf_array[1,:,:],axis=0)
+    distMat = np.sqrt(xd**2+yd**2)
+    u = np.cumsum(distMat, axis=0)
+    # Find row with smallest distance
+    minDist = np.min(np.sum(distMat, axis=0))
+    # Make distance map to the center
+    halfDist = np.sum(distMat, axis=0)/2
+    uCenter = u-halfDist
+    # Locate indices on each side that are closest to the half of the min dist
+    limitIdx1 = np.argmin(np.abs(uCenter+(minDist/2)),axis=0)
+    limitIdx2 = np.argmin(np.abs(uCenter-(minDist/2)),axis=0)
+    xPoints = int(np.round(minDist/xStep))
+
+    surf_array_X = np.zeros((3,xPoints,surf_array.shape[2]))
+    for i in range(surf_array.shape[2]):
+        points = surf_array[:,limitIdx1[i]:limitIdx2[i],i]
+        #Remove repetitions
+        points = np.unique(points,axis=1)
+        # Sort the points by X axis
+        points = points[:,np.argsort(points[0,:])]
+        # Calculate spline for the final step and equally starting example values
+        zSpl = UnivariateSpline(points[0,:], points[2,:], k=1, s=0)
+
+        u = np.cumsum(distMat[limitIdx1[i]:limitIdx2[i]-1,i])
+        u = np.hstack([[0],u])
+        # Interpolate the x-coordinates independently with respect to the new coordinates.
+        t = np.linspace(0,u.max(),xPoints)
+        xn = np.interp(t, u, points[0,:])
+        yn = np.interp(t, u, points[1,:])
+        zn = zSpl(xn)
+        surf_array_X[0,:,i] = xn
+        surf_array_X[1,:,i] = yn
+        surf_array_X[2,:,i] = zn
+
+    ### Z Axis
+    zd = np.diff(surf_array_X[2,:,:],axis=1)
+    yd = np.diff(surf_array_X[1,:,:],axis=1)
+    distMat = np.sqrt(zd**2+yd**2)
+    u = np.cumsum(distMat, axis=1)
+    # Find row with smallest distance
+    minDist = np.min(np.sum(distMat, axis=1))
+    # Make distance map to the center
+    halfDist = np.sum(distMat, axis=1)/2
+    uCenter = (u.transpose()-halfDist).transpose()
+    # Locate indices on each side that are closest to the half of the min dist
+    limitIdx1 = np.argmin(np.abs(uCenter+(minDist/2)),axis=1)
+    limitIdx2 = np.argmin(np.abs(uCenter-(minDist/2)),axis=1)
+    zPoints = int(np.round(minDist/zStep))
+
+    surf_array_Z = np.zeros((3,surf_array_X.shape[1],zPoints))
+    for i in range(surf_array_X.shape[1]):
+        points = surf_array_X[:,i,limitIdx1[i]:limitIdx2[i]]
+        #Remove repetitions
+        points = np.unique(points,axis=1)
+        # Sort the points by Z axis
+        points = points[:,np.argsort(points[2,:])]
+        # Calculate spline for the final step and equally starting example values
+        xSpl = scipy.interpolate.interp1d(points[2,:], points[0,:])
+
+        u = np.cumsum(distMat[i,limitIdx1[i]:limitIdx2[i]-1])
+        u = np.hstack([[0],u])
+        # Interpolate the x-coordinates independently with respect to the new coordinates.
+        t = np.linspace(0,u.max(),zPoints)
+        zn = np.interp(t, u, points[2,:])
+        xn = xSpl(zn)
+        yn = np.interp(t, u, points[1,:])
         surf_array_Z[0,i,:] = xn
         surf_array_Z[1,i,:] = yn
         surf_array_Z[2,i,:] = zn
