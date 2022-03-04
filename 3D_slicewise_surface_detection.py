@@ -30,11 +30,12 @@ def unfoldedHoneycombSurfDetect(unfolded_img, honeycombCost,  visualize=False, r
     return_helper_surfaces - if True, returns also dark helper surfaces.
     """
     # Layered surface detection parameters - hidden, they don't need to be changed
-    darkSurfacesWeight = 300 # weight of dark surfaces cost 
+    darkSurfacesWeight = 1000 # weight of dark surfaces cost 
     smoothness = [2,1] # honeycomb edge and dark surface smoothness term 
-    honeycombSurfacesMargin = [6, 25] # min, max distance margin between the honeycomb edges
-    darkSurfacesMargin = [12, 35] # min, max distance margin between the dark helper surfaces
+    honeycombSurfacesMargin = [4, 16] # min, max distance margin between the honeycomb edges
+    darkSurfacesMargin = [8, 20] # min, max distance margin between the dark helper surfaces
     darkToHoneycombMinMargin = 1 # min distance between the helper surface and honeycomb edge
+    darkWhiteHelperSurfacesMargin = [1,15] # min, max distance margin between the dark helper surface and white helper surface
     # darkSurfacesWeight = 300 # weight of dark surfaces cost 
     # smoothness = [1,1] # honeycomb edge and dark surface smoothness term 
     # honeycombSurfacesMargin = [2, 14] # min, max distance margin between the honeycomb edges
@@ -69,9 +70,9 @@ def unfoldedHoneycombSurfDetect(unfolded_img, honeycombCost,  visualize=False, r
     helper.add_layered_containment(layers[1], layers[3], min_margin=darkToHoneycombMinMargin) 
 
     # Top dark surface and white central surface
-    helper.add_layered_containment(layers[2], layers[4], min_margin=1, max_margin=24) 
+    helper.add_layered_containment(layers[2], layers[4], min_margin=darkWhiteHelperSurfacesMargin[0], max_margin=darkWhiteHelperSurfacesMargin[1]) 
     # White central surface and bottom dark surface
-    helper.add_layered_containment(layers[4], layers[3], min_margin=1, max_margin=24) 
+    helper.add_layered_containment(layers[4], layers[3], min_margin=darkWhiteHelperSurfacesMargin[0], max_margin=darkWhiteHelperSurfacesMargin[1]) 
 
     ## Cut
     helper.solve()
@@ -109,17 +110,19 @@ def detect3dSlicewiseLayers(img, layer_num, params):
         visualizeUnfolding - if True, visualizes the unfolding process steps\n
         interpStep - distance between the interpolated points\n
         normalLinesRange - Range (half of the length) of lines normal to interpolation points\n
+        normalLinesNumPoints - Number of interpolation points along a normal line\n
         returnHelperSurfaces - if True, returns also dark helper surfaces from surface detection process.
     """
 
-    if len(params)!= 4:
-            raise Exception(f'Expected 4 parameters: visualizeUnfolding, interpStep, normalLinesRange, returnHelperSurfaces, but got {len(params)}')
+    if len(params)!= 5:
+            raise Exception(f'Expected 5 parameters: visualizeUnfolding, interpStep, normalLinesRange, returnHelperSurfaces, but got {len(params)}')
 
     #Extracting parameters from params list
     visualizeUnfolding = params[0]
     interpStep = params[1]
     normalLinesRange = params[2]
-    returnHelperSurfaces = params[3]
+    normalLinesNumPoints = params[3]
+    returnHelperSurfaces = params[4]
 
     ## Calculate image gaussian model 
     means, variances = helpers.imgGaussianModel(img)
@@ -146,7 +149,7 @@ def detect3dSlicewiseLayers(img, layer_num, params):
         t1 = time.time()
         print(f"Normals calculated, time: {t1-t0}")
         t0 = time.time()
-        hc.get_unfold_points_from_normals2(interp_points=normalLinesRange*2) #!!!!!
+        hc.get_unfold_points_from_normals2(interp_points=normalLinesNumPoints)
         t1 = time.time()
         print(f"Normals interpolated, time: {t1-t0}")
         unfolded_stack = hc.unfold_image()
@@ -181,20 +184,22 @@ if __name__ == "__main__":
 
     # I = skimage.io.imread('data/29-2016_29-2016-60kV-resized_z200.tif')
     # I = skimage.io.imread('data/29-2016_29-2016-60kV-resized.tif')
-    I = skimage.io.imread('data/29-2016_29-2016-60kV-zoom-center_recon.tif')
+    # I = skimage.io.imread('data/29-2016_29-2016-60kV-zoom-center_recon.tif')
+    I = skimage.io.imread('data/29-2016_29-2016-60kV-LFoV-center-+-1-ring_recon.tif')
 
-    I = I[200:215,:,:]
-    # I = I[770:780,:,:]
-    # I = I[0:15,:,:]
+    # I = I[250:750,:,:]
+    I = I[380:620,:,:]
+    # I = I[380:400,:,:]
 
 
     # I_2d = I[200,:,:]
 
     visualizeUnfolding = True # if True - visualizes the unfolding process steps
-    interpStep = 10/4 # Distance between the interpolated points
-    normalLinesRange = 40 # Range (half of the length) of lines normal to interpolation points
+    interpStep = 1 # Distance between the interpolated points
+    normalLinesRange = 15 # Range (half of the length) of lines normal to interpolation points
+    normalLinesNumPoints = 60 # Number of interpolation points along a normal line
     returnHelperSurfaces = False # if True, returns also dark helper surfaces from surface detection process
-    params = [visualizeUnfolding, interpStep, normalLinesRange, 
+    params = [visualizeUnfolding, interpStep, normalLinesRange, normalLinesNumPoints,
          returnHelperSurfaces]
 
     layersList = detect3dSlicewiseLayers(I, 1, params)
@@ -217,8 +222,8 @@ if __name__ == "__main__":
     plt.imshow(segmImg[15,:,:].transpose())
     plt.show()
 
-    surf = helpers.layersToSurface(layersList)
-    surf_array = np.array(surf)
-    np.save("data/slicewise_z200-780_allSurf_raw.npy", surf_array)
+    # surf = helpers.layersToSurface(layersList)
+    # surf_array = np.array(surf)
+    # np.save("data/H29big_slicewise_z380-620_2Surf_raw.npy", surf_array)
 
     # vwl.save_multSurf2vtk('data/surfaces/slicewise_z200New_allSurf.vtk', surf)
