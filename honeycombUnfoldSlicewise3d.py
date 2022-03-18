@@ -254,18 +254,63 @@ class HoneycombUnfoldSlicewise3d:
             for j in range(surf.shape[2]):
                 x1 = surf[0,0,j]
                 x2 = surf[1,0,j]
-                if x1<x2:
-                    x1 = x1 + 0.01
-                    x2 = x2 - 0.01
-                else:
-                    x1 = x1 - 0.01
-                    x2 = x2 + 0.01
+                absdiff = abs(x1-x2)
+                if x1<x2: 
+                    x1 = x1 + absdiff/1000
+                    x2 = x2 - absdiff/1000
+                elif x1>x2:
+                    x1 = x1 - absdiff/1000
+                    x2 = x2 + absdiff/1000
                 xArr[:,j] = np.linspace(x1,x2,interp_points)
             xArr = xArr.ravel()
             xi = np.array((xArr,zArr)).transpose()
             points = np.array((surfFlat[0, :],surfFlat[2, :])).transpose()
             # create interpolation function  x,z,y order
             yArr = scipy.interpolate.griddata(points,surfFlat[1, :], xi)
+            interpSurf = np.array((xArr,yArr,zArr)).reshape(3,interp_points,zCol.shape[1])
+
+            # Swap from YZ to ZY and assign
+            self.unfolding_points[:,:,:,i] = np.swapaxes(interpSurf,1,2)
+
+    def get_unfold_points_from_normals3(self, interp_points=60):
+        """Interpolates points along each normal line to create unfolding points.
+        Speeds up the process by calculating all points in one Z axis column at once\n
+        Params:\n
+        interp_points - number of points interpolated along each normal line.
+        """
+        if self.normals.shape[2] == 0:
+            raise Exception('normals are not defined')
+
+        self.interp_points = interp_points
+
+        # Z, Y, X shape in order to fit original image definition
+        self.unfolding_points = np.zeros((3,self.normals.shape[3],interp_points,self.normals.shape[2]))
+        for i in range(self.normals.shape[2]):
+            surf = self.normals[:,:,i,:]
+            surfFlat = np.reshape(np.moveaxis(surf,0,-1),(3,-1))
+            
+            zRow = np.array([np.linspace(surf[0,2,0],surf[1,2,0],interp_points)])
+            zCol = np.array([np.arange(0,surf.shape[2],surf[0,2,1]-surf[0,2,0])])
+            zArr = (zRow+1).transpose()@zCol
+            zArr = zArr.ravel()
+            yArr = np.zeros((interp_points,surf.shape[2]))
+            
+            for j in range(surf.shape[2]):
+                y1 = surf[0,1,j]
+                y2 = surf[1,1,j]
+                absdiff = abs(y1-y2)
+                if y1<y2: 
+                    y1 = y1 + absdiff/1000
+                    y2 = y2 - absdiff/1000
+                elif y1>y2:
+                    y1 = y1 - absdiff/1000
+                    y2 = y2 + absdiff/1000
+                yArr[:,j] = np.linspace(y1,y2,interp_points)
+            yArr = yArr.ravel()
+            xi = np.array((yArr,zArr)).transpose()
+            points = np.array((surfFlat[1, :],surfFlat[2, :])).transpose()
+            # create interpolation function  x,z,y order
+            xArr = scipy.interpolate.griddata(points,surfFlat[0, :], xi)
             interpSurf = np.array((xArr,yArr,zArr)).reshape(3,interp_points,zCol.shape[1])
 
             # Swap from YZ to ZY and assign

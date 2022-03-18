@@ -29,7 +29,8 @@ def imgGaussianModel(img, step_3d=89):
         idxList = np.arange(0,imgLen,step_3d)
         imgFlat = np.take(imgFlat, idxList)
 
-    imgFlat = imgFlat[imgFlat != 0]
+    # imgFlat = imgFlat[imgFlat > 1700]
+    imgFlat = imgFlat[imgFlat > 20]
 
     gm = GaussianMixture(n_components=2, random_state=0)
     gm.fit(imgFlat.reshape(-1,1))
@@ -49,7 +50,7 @@ def gaussianProbFunction(img, mean, variance):
     cost = np.exp(-0.5*((img/np.sqrt(variance))**2.0))
     return cost
 
-def sigmoidProbFunction(img, mean, variance, visualize=False):
+def sigmoidProbFunction(img, mean, variance, weight, visualize=False):
     """Calculates a cost image by fitting a sigmoid function
     between a pair of gaussians defined by a mean and variance.
     Slope of the sigmoid defines the class probability/cost.\n
@@ -57,6 +58,7 @@ def sigmoidProbFunction(img, mean, variance, visualize=False):
     img - image to calculate cost on\n
     mean - 2 element vector of means of the gaussians\n
     variance - 2 element vector of variances of the gaussians (not used in this version)\n
+    weight - defines where should the center of the sigomid be placed. The bigger the weight, the closest it is to the first mean\n
     visualize - if True, will plot the fitted sigmoid and show the cost image.
     """
     #Sort means
@@ -67,9 +69,11 @@ def sigmoidProbFunction(img, mean, variance, visualize=False):
     # scale = 1/(np.mean(sigma)/abs(mean[1]-mean[0]))
 
     #Center of the sigmoid in between the gaussians
-    center = np.mean(mean)
+    # center = np.mean(mean)
+    center = mean[0]*weight + mean[1]*(1-weight)
     # Scale parameter calculated from the desired prob at gaussian mean 
-    scale = np.log(1/gaussCenterProb - 1)/(mean[0]-center)
+    # scale = np.log(1/gaussCenterProb - 1)/(mean[0]-center)
+    scale = np.log(1/gaussCenterProb - 1)/(mean[0]-np.mean(mean))
     # Sigmoid-based cost
     cost =  1/(1+np.exp(-scale*(img-center)))
 
@@ -266,12 +270,13 @@ def getSurfUniformSpacing(surf_array, zPoints=200, xPoints=200):
     return surf_array_Z
 
 
-def getMultSurfUniformSpacing(mult_surf_array, zStep=3, xStep=3):
+def getMultSurfUniformSpacing(mult_surf_array, zStep=3, xStep=3, mult_normals=None):
     """Defines a uniform (in relation to surface curve) x,z axis spacing 
     based on a 1st order spline fitted to the provided points.\n
     Params:\n
     surf_array - 4d array with surfaces (surfNum,3,xNum,zNum)\n
     step - interpolation step\n
+    mult_normals - optional normal vectors matrix to include in calculation
     """
     # https://stackoverflow.com/questions/19117660/how-to-generate-equispaced-interpolating-values
     
@@ -298,8 +303,12 @@ def getMultSurfUniformSpacing(mult_surf_array, zStep=3, xStep=3):
     tPoints = int(np.round(avgDist/xStep))
 
     mult_surf_array_X = np.zeros((mult_surf_array.shape[0],3,tPoints,mult_surf_array.shape[3]))
+    if mult_normals is not None:
+        mult_normals_X = np.zeros((mult_normals.shape[0],3,tPoints,mult_normals.shape[3]))
     for j in range(mult_surf_array.shape[0]):
         surf_array = mult_surf_array[j,:,:,:]
+        if mult_normals is not None:
+            normals = mult_normals[j,:,:,:]
         edge1Val = np.max(np.min(surf_array[0,:,:],axis=0))    
         edge2Val = np.min(np.max(surf_array[0,:,:],axis=0))
         for i in range(surf_array.shape[2]):
@@ -328,6 +337,14 @@ def getMultSurfUniformSpacing(mult_surf_array, zStep=3, xStep=3):
             mult_surf_array_X[j,0,:,i] = xn
             mult_surf_array_X[j,1,:,i] = yn
             mult_surf_array_X[j,2,:,i] = zn
+            if mult_normals is not None:
+                norm_points = normals[:,:,i]
+                nxSpline = UnivariateSpline(points[0,:], norm_points[0,:], k=1, s=0)
+                nySpline = UnivariateSpline(points[0,:], norm_points[1,:], k=1, s=0)
+                nzSpline = UnivariateSpline(points[0,:], norm_points[2,:], k=1, s=0)
+                mult_normals_X[j,0,:,i] = nxSpline(xn)
+                mult_normals_X[j,1,:,i] = nySpline(xn)
+                mult_normals_X[j,2,:,i] = nzSpline(xn)
 
     ### Z Axis
     # edge1Val = np.max(np.min(mult_surf_array_X[:,2,:,:],axis=2))
@@ -343,8 +360,12 @@ def getMultSurfUniformSpacing(mult_surf_array, zStep=3, xStep=3):
     tPoints = int(np.round(avgDist/zStep))
 
     mult_surf_array_Z = np.zeros((mult_surf_array_X.shape[0],3,mult_surf_array_X.shape[2],tPoints))
+    if mult_normals is not None:
+        mult_normals_Z = np.zeros((mult_normals_X.shape[0],3,mult_normals_X.shape[2],tPoints))
     for j in range(mult_surf_array_X.shape[0]):
         surf_array = mult_surf_array_X[j,:,:,:]
+        if mult_normals is not None:
+            normals = mult_normals_X[j,:,:,:]
         edge1Val = np.max(np.min(surf_array[2,:,:],axis=1))
         edge2Val = np.min(np.max(surf_array[2,:,:],axis=1))
         for i in range(surf_array.shape[1]):
@@ -375,8 +396,19 @@ def getMultSurfUniformSpacing(mult_surf_array, zStep=3, xStep=3):
             mult_surf_array_Z[j,0,i,:] = xn
             mult_surf_array_Z[j,1,i,:] = yn
             mult_surf_array_Z[j,2,i,:] = zn
+            if mult_normals is not None:
+                norm_points = normals[:,i,:]
+                nxSpline = UnivariateSpline(points[2,:], norm_points[0,:], k=1, s=0)
+                nySpline = UnivariateSpline(points[2,:], norm_points[1,:], k=1, s=0)
+                nzSpline = UnivariateSpline(points[2,:], norm_points[2,:], k=1, s=0)
+                mult_normals_Z[j,0,i,:] = nxSpline(zn)
+                mult_normals_Z[j,1,i,:] = nySpline(zn)
+                mult_normals_Z[j,2,i,:] = nzSpline(zn)
 
-    return mult_surf_array_Z
+    if mult_normals is None:
+        return mult_surf_array_Z
+    else:
+        return [mult_surf_array_Z, mult_normals_Z]
 
 def getLinesUniformInterpSpacing(lines_list, zStep=1, xStep=1):
     """Defines a uniform (in relation to surface curve) x,z axis spacing 

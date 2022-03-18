@@ -1,0 +1,32 @@
+#####
+29-2016_29-2016-60kV-zoom-center_recon.tif
+
+I = I[200:780,:,:]
+
+interpStep = 10/4 
+normalLinesRange = 40
+normalLinesNumPoints = 80
+
+darkSurfacesWeight = 300 # weight of dark surfaces cost 
+smoothness = [2,1] # honeycomb edge and dark surface smoothness term 
+honeycombSurfacesMargin = [6, 25] # min, max distance margin between the honeycomb edges
+darkSurfacesMargin = [12, 35] # min, max distance margin between the dark helper surfaces
+darkToHoneycombMinMargin = 1 # min distance between the helper surface and honeycomb edge
+darkWhiteHelperSurfacesMargin = [1,24] # min, max distance margin between the dark helper surface and white helper surf
+
+
+#####
+29-2016_29-2016-60kV-LFoV-center-+-1-ring_recon.tif
+
+I = I[380:620,:,:]
+
+interpStep = 1 # Distance between the interpolated points
+normalLinesRange = 15 # Range (half of the length) of lines normal to interpolation points
+normalLinesNumPoints = 60 # Number of interpolation points along a normal line
+
+darkSurfacesWeight = 5000 # weight of dark surfaces cost 
+smoothness = [1,1] # honeycomb edge and dark surface smoothness term 
+honeycombSurfacesMargin = [4, 16] # min, max distance margin between the honeycomb edges
+darkSurfacesMargin = [8, 20] # min, max distance margin between the dark helper surfaces
+darkToHoneycombMinMargin = 1 # min distance between the helper surface and honeycomb edge
+darkWhiteHelperSurfacesMargin = [1,15] # min, max distance margin between the dark helper surface and white helper surface

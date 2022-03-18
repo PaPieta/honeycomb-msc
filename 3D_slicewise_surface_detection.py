@@ -21,21 +21,22 @@ import vtk_write_lite as vwl # for saving vtk file
 import time
 
 
-def unfoldedHoneycombSurfDetect(unfolded_img, honeycombCost,  visualize=False, return_helper_surfaces=False):
+def unfoldedHoneycombSurfDetect(unfolded_img, honeycombCost, backgroundCost, visualize=False, return_helper_surfaces=False):
     """ Detects edges of honeycomb structure based on an unfolded image.\n
     Params:\n
     unfolded_img - clean unfolded image
-    honeycombCost - cost function image for the image \n
+    honeycombCost - cost function image for the honeycomb-targeting surfaces \n
+    honeycombCost - cost function image for the background-targeting surfaces \n
     visualize - if True, plots the resulting surfaces on an unfolded image \n
     return_helper_surfaces - if True, returns also dark helper surfaces.
     """
     # Layered surface detection parameters - hidden, they don't need to be changed
-    darkSurfacesWeight = 1000 # weight of dark surfaces cost 
-    smoothness = [2,1] # honeycomb edge and dark surface smoothness term 
+    darkSurfacesWeight = 300 # weight of dark surfaces cost 
+    smoothness = [1,1] # honeycomb edge and dark surface smoothness term 
     honeycombSurfacesMargin = [4, 16] # min, max distance margin between the honeycomb edges
-    darkSurfacesMargin = [8, 20] # min, max distance margin between the dark helper surfaces
+    darkSurfacesMargin = [6, 20] # min, max distance margin between the dark helper surfaces
     darkToHoneycombMinMargin = 1 # min distance between the helper surface and honeycomb edge
-    darkWhiteHelperSurfacesMargin = [1,15] # min, max distance margin between the dark helper surface and white helper surface
+    darkWhiteHelperSurfacesMargin = [1,10] # min, max distance margin between the dark helper surface and white helper surface
     # darkSurfacesWeight = 300 # weight of dark surfaces cost 
     # smoothness = [1,1] # honeycomb edge and dark surface smoothness term 
     # honeycombSurfacesMargin = [2, 14] # min, max distance margin between the honeycomb edges
@@ -43,8 +44,8 @@ def unfoldedHoneycombSurfDetect(unfolded_img, honeycombCost,  visualize=False, r
     # darkToHoneycombMinMargin = 0 # min distance between the helper surface and honeycomb edge
 
     layers = [slgbuilder.GraphObject(0*honeycombCost), slgbuilder.GraphObject(0*honeycombCost), # no on-surface cost
-            slgbuilder.GraphObject(darkSurfacesWeight*(255-honeycombCost)), slgbuilder.GraphObject(darkSurfacesWeight*(255-honeycombCost)), # extra 2 dark lines
-            slgbuilder.GraphObject(darkSurfacesWeight*1.2*(honeycombCost))] # Extra white line 
+            slgbuilder.GraphObject(darkSurfacesWeight*(255-backgroundCost)), slgbuilder.GraphObject(darkSurfacesWeight*(255-backgroundCost)), # extra 2 dark lines
+            slgbuilder.GraphObject(darkSurfacesWeight*2*(honeycombCost))] # Extra white line 
     helper = slgbuilder.MaxflowBuilder()
     helper.add_objects(layers)
 
@@ -149,7 +150,7 @@ def detect3dSlicewiseLayers(img, layer_num, params):
         t1 = time.time()
         print(f"Normals calculated, time: {t1-t0}")
         t0 = time.time()
-        hc.get_unfold_points_from_normals2(interp_points=normalLinesNumPoints)
+        hc.get_unfold_points_from_normals3(interp_points=normalLinesNumPoints)
         t1 = time.time()
         print(f"Normals interpolated, time: {t1-t0}")
         unfolded_stack = hc.unfold_image()
@@ -159,16 +160,17 @@ def detect3dSlicewiseLayers(img, layer_num, params):
         for j in range(unfolded_stack.shape[0]):
             unfolded_img = unfolded_stack[j,:,:]
             # Calculate cost
-            honeycombCost = (1 - helpers.sigmoidProbFunction(unfolded_img,means,variances, visualize=(visualizeUnfolding and j == 0)))*255
+            honeycombCost = (1 - helpers.sigmoidProbFunction(unfolded_img,means,variances, weight=0.5, visualize=(visualizeUnfolding and j == 0)))*255
+            backgroundCost = (1 - helpers.sigmoidProbFunction(unfolded_img,means,variances, weight=0.001, visualize=(visualizeUnfolding and j == 0)))*255
 
             if visualizeUnfolding == True and j == 0:
                 plt.figure()
-                plt.imshow(honeycombCost)
+                plt.imshow(backgroundCost)
                 plt.show()
 
             unfolded_img = helpers.rescaleImage(unfolded_img, 1, 255)
             ### Layered surfaces detection
-            segmentation_surfaces = unfoldedHoneycombSurfDetect(unfolded_img, honeycombCost, 
+            segmentation_surfaces = unfoldedHoneycombSurfDetect(unfolded_img, honeycombCost, backgroundCost,
                 visualize=(visualizeUnfolding), return_helper_surfaces=returnHelperSurfaces)
 
             ## Fold detected lines back to original image shape
@@ -185,14 +187,20 @@ if __name__ == "__main__":
     # I = skimage.io.imread('data/29-2016_29-2016-60kV-resized_z200.tif')
     # I = skimage.io.imread('data/29-2016_29-2016-60kV-resized.tif')
     # I = skimage.io.imread('data/29-2016_29-2016-60kV-zoom-center_recon.tif')
-    I = skimage.io.imread('data/29-2016_29-2016-60kV-LFoV-center-+-1-ring_recon.tif')
+    # I = skimage.io.imread('data/29-2016_29-2016-60kV-LFoV-center-+-1-ring_recon.tif')
+    I = skimage.io.imread('data/NL07C_NL07C-60kV-LFoV-center-+-1-ring_recon.tif')
 
-    # I = I[250:750,:,:]
-    I = I[380:620,:,:]
-    # I = I[380:400,:,:]
+    # I = I[390:640,:,:]
+    I = I[390:410,:,:]
 
 
     # I_2d = I[200,:,:]
+
+    # Rotation (if needed)
+    Inew = []
+    for i in range(I.shape[0]):
+        Inew.append(scp.rotate(I[i,:,:],-15))
+    I = np.array(Inew)
 
     visualizeUnfolding = True # if True - visualizes the unfolding process steps
     interpStep = 1 # Distance between the interpolated points
@@ -224,6 +232,7 @@ if __name__ == "__main__":
 
     # surf = helpers.layersToSurface(layersList)
     # surf_array = np.array(surf)
-    # np.save("data/H29big_slicewise_z380-620_2Surf_raw.npy", surf_array)
+    # np.save("data/H29big_slicewise_z380-620_allSurf_raw_3.npy", surf_array)
+    # np.save("data/H29_test_30.npy", surf_array)
 
-    # vwl.save_multSurf2vtk('data/surfaces/slicewise_z200New_allSurf.vtk', surf)
+    # # vwl.save_multSurf2vtk('data/surfaces/slicewise_z200New_allSurf.vtk', surf)
