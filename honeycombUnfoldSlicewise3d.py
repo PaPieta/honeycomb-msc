@@ -317,9 +317,11 @@ class HoneycombUnfoldSlicewise3d:
             self.unfolding_points[:,:,:,i] = np.swapaxes(interpSurf,1,2)
 
 
-    def unfold_image(self):
+    def unfold_image(self, method='linear'):
         """Creates an unfolded image of the honeycomb structure 
         using previously defined unfolding points.
+        Params:\n
+        method - interpolation method, 'lienar' or 'nearest'
         """
         if self.unfolding_points.shape[1] == 0:
             raise Exception('Unfolding points are not defined')
@@ -327,7 +329,7 @@ class HoneycombUnfoldSlicewise3d:
         y = np.linspace(0,self.img_shape[1]-1,self.img_shape[1])
         x = np.linspace(0,self.img_shape[2]-1,self.img_shape[2])
         z = np.linspace(0,self.img_shape[0]-1,self.img_shape[0])
-        img_interp = scipy.interpolate.RegularGridInterpolator((z, y, x), self.img, method='linear')
+        img_interp = scipy.interpolate.RegularGridInterpolator((z, y, x), self.img, method=method)
         # Flatten unfolding points to 3,-1, swap to -1,3 and change order from xyz to zyx
         temp_unf_points = np.swapaxes(self.unfolding_points.reshape(3,-1),0,1)[:,[2,1,0]]
 

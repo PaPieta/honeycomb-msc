@@ -405,9 +405,11 @@ if __name__ == "__main__":
     # surf_array_obj = np.load('data/slicewise_z250-750_allSurf_raw3.npy', allow_pickle=True)
     # surf_array_obj = np.load('data/slicewise_z200-780_allSurf_raw.npy', allow_pickle=True)
     # surf_array_obj = np.load('data/H29_test_30.npy', allow_pickle=True)
-    surf_array_obj = np.load('data/H29big_slicewise_z380-620_allSurf_raw_3.npy', allow_pickle=True)
+    # surf_array_obj = np.load('data/H29big_slicewise_z380-620_allSurf_raw_3.npy', allow_pickle=True)
+    surf_array_obj = np.load('data/NLbig_slicewise_z390-640_allSurf_raw_2.npy', allow_pickle=True)
     # pixelSize = 0.0078329 #mm 
-    pixelSize = 0.017551 #mm 
+    # pixelSize = 0.017551 #mm 
+    pixelSize = 0.031504 #mm 
 
     # Retrieve list of surfaces from the object array
     surf_array_list = npy_to_surf_list(surf_array_obj)
@@ -419,7 +421,7 @@ if __name__ == "__main__":
         # surf2_array = surf2_array[:,:,:,:238]
         # [surf2_array, shell_array] = surf_to_shell_interp(surf2_array,step=[3,3],sigma=2,pixel_size=pixelSize,return_surf=True)
         # [surf2_array, shell_array] = surf_to_shell_interp2(surf2_array,step=[3,3],sigma=4,pixel_size=pixelSize,return_surf=True)
-        [surf2_array, shell_array] = surf_to_shell_interp3(surf2_array,step=[6,6],sigma=2,pixel_size=pixelSize,return_surf=True)
+        [surf2_array, shell_array] = surf_to_shell_interp3(surf2_array,step=[3,3],sigma=2,pixel_size=pixelSize,return_surf=True)
         # shell_array = surf_to_shell_simple(surf2_array)
         shell_array_list.append(shell_array)
         surf_array_list[i*2] = surf2_array[0,:,:,:]
@@ -433,11 +435,11 @@ if __name__ == "__main__":
         plt.colorbar()
     plt.show()
 
-    vwl.save_multSurf2vtk('data/surfaces/H29big_slicewise_z380-620_2.vtk', surf_array_list)
-    vwl.save_multSurf2vtk('data/surfaces/H29big_slicewise_z380-620_2_center.vtk', shell_array_list)
+    # vwl.save_multSurf2vtk('data/surfaces/NLbig_slicewise_z390-640.vtk', surf_array_list)
+    # vwl.save_multSurf2vtk('data/surfaces/NLbig_slicewise_z390-640_center.vtk', shell_array_list)
 
-    partFilePath = "data/abaqusShells/dummyPart.inp"
-    masterFilePath = "data/abaqusShells/dummyMaster.inp"
-    savePath = "data/abaqusShells/H29big_slicewise_z380-620_2x/"
+    # partFilePath = "data/abaqusShells/dummyPart.inp"
+    # masterFilePath = "data/abaqusShells/dummyMaster.inp"
+    # savePath = "data/abaqusShells/NLbig_slicewise_z390-640_2x/"
 
-    fem_model_shell_list(shell_array_list, partFilePath, masterFilePath, savePath)
+    # fem_model_shell_list(shell_array_list, partFilePath, masterFilePath, savePath)
