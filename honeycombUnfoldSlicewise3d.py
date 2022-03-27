@@ -26,7 +26,7 @@ class HoneycombUnfoldSlicewise3d:
     
 
     def __init__(self, img, vis_img, visualize=True):
-        """Class initialization. 
+        """Class initialization.n
         Params:\n
         img - 3D image stack of the honeycmb scan\n
         vis_img - deep copy of the image stack for visualization purposes\n
@@ -40,6 +40,7 @@ class HoneycombUnfoldSlicewise3d:
         unfolding_points - points interpolated along the normal lines, used for unfolding of the image\n
         interp_points - number of interpolation points along each normal line\n
         interp_x_len, interp_z_len - size of the interpolation matrix corelated to image X and Z axis\n
+        unfolded_img - 3D image stack of the unfolded image
         """
         self.img = img
         self.vis_img = vis_img
@@ -55,6 +56,8 @@ class HoneycombUnfoldSlicewise3d:
         self.interp_points = 0
         self.interp_x_len = 0
         self.interp_z_len = 0
+
+        self.unfolded_img = np.empty((1,0))
 
 
     def draw_corners(self):
@@ -335,6 +338,8 @@ class HoneycombUnfoldSlicewise3d:
 
         unfolded_img = img_interp(temp_unf_points)
         unfolded_img = unfolded_img.reshape((self.interp_z_len, self.interp_points, self.interp_x_len))
+        
+        self.unfolded_img = unfolded_img.astype(np.int32)
 
         if self.visualize == True:
             zUnique = np.unique(self.lines_interp[2,:])
@@ -347,7 +352,7 @@ class HoneycombUnfoldSlicewise3d:
                 plt.imshow(unfolded_img[zlayer,:,:], cmap='gray')
             plt.show()
 
-        return unfolded_img.astype(np.int32)
+        return self.unfolded_img
 
 
     def fold_surfaces_back(self, surfaces, zIdx):

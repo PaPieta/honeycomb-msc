@@ -19,14 +19,44 @@ darkWhiteHelperSurfacesMargin = [1,24] # min, max distance margin between the da
 29-2016_29-2016-60kV-LFoV-center-+-1-ring_recon.tif
 
 I = I[380:620,:,:]
-
+loadPointsPath="data/cornerPoints/H29big_slicewise_z380-620.txt"
+#### Unfolding params
 interpStep = 1 # Distance between the interpolated points
 normalLinesRange = 15 # Range (half of the length) of lines normal to interpolation points
 normalLinesNumPoints = 60 # Number of interpolation points along a normal line
+#### Detection params
+# In segmentation
+returnHelperSurfaces = False, # if True, returns also dark helper surfaces from surface detection process
+a_parabola = 0.05 # a parameter of y=ax^2+b equation, used to modify the helper detection cost function
+# Helper
+helperDetectionSmoothness = 1 # how much in y direction the line can move with each step in the x direction (only int values)
+# Main detection
+edgeSmoothness=1 
+helperSmoothness=1 
+helperWeight=100 # multiplier of how much more "important" the helper line detetion is
+wallThickness=[4,16] # min-max value of the distance between teh edges of the wall
+darkHelperDist=[8, 20] # min-max distance between the "dark" helper lines following the background path
+darkWhiteHelperDist=[1,15] # min-max distance between a "dark" helper line and the wall central helper line
 
-darkSurfacesWeight = 5000 # weight of dark surfaces cost 
-smoothness = [1,1] # honeycomb edge and dark surface smoothness term 
-honeycombSurfacesMargin = [4, 16] # min, max distance margin between the honeycomb edges
-darkSurfacesMargin = [8, 20] # min, max distance margin between the dark helper surfaces
-darkToHoneycombMinMargin = 1 # min distance between the helper surface and honeycomb edge
-darkWhiteHelperSurfacesMargin = [1,15] # min, max distance margin between the dark helper surface and white helper surface
+############
+'data/NL07C_NL07C-60kV-LFoV-center-+-1-ring_recon.tif'
+
+I = I[390:640,:,:]
+loadPointsPath="data/cornerPoints/NLbig_z390-640_rot_-15.txt"
+#### Unfolding params
+interpStep = 1 # Distance between the interpolated points
+normalLinesRange = 15 # Range (half of the length) of lines normal to interpolation points
+normalLinesNumPoints = 60 # Number of interpolation points along a normal line
+#### Detection params
+# In segmentation
+returnHelperSurfaces = False, # if True, returns also dark helper surfaces from surface detection process
+a_parabola = 0.05 # a parameter of y=ax^2+b equation, used to modify the helper detection cost function
+# Helper
+helperDetectionSmoothness = 1 # how much in y direction the line can move with each step in the x direction (only int values)
+# Main detection
+edgeSmoothness=1 
+helperSmoothness=1 
+helperWeight=100 # multiplier of how much more "important" the helper line detetion is
+wallThickness=[4,16] # min-max value of the distance between teh edges of the wall
+darkHelperDist=[6, 20] # min-max distance between the "dark" helper lines following the background path
+darkWhiteHelperDist=[1,10] # min-max distance between a "dark" helper line and the wall central helper line
