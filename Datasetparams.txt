@@ -118,3 +118,29 @@ darkWhiteHelperDist=[1,20] # min-max distance between a "dark" helper line and t
 # Cost function
 wallCostWeight = 0.5 # defines the position of 0.5 probability value in the wall cost function, if set to 0.5 it is in the middle between the means of the distributions
 helperCostWeight = 0.5 # same as above, applies both to helper detection and to helper surfaces in the main detection
+
+############
+'data/PB27A-60kV-LFoV-center-+-1-ring_recon.txm.tif'
+
+I = I[250:780,:,:]
+loadPointsPath = "data/cornerPoints/PBbig_z250-780_rot_-15.txt"
+#### Unfolding params
+interpStep = 1 # Distance between the interpolated points
+normalLinesRange = 15 # Range (half of the length) of lines normal to interpolation points
+normalLinesNumPoints = 60 # Number of interpolation points along a normal line
+#### Detection params
+# In segmentation
+returnHelperSurfaces = False # if True, returns also dark helper surfaces from surface detection process
+a_parabola = 0.05 # a parameter of y=ax^2+b equation, used to modify the helper detection cost function
+# Helper
+helperDetectionSmoothness = 1 # how much in y direction the line can move with each step in the x direction (only int values)
+# Main detection
+edgeSmoothness=1
+helperSmoothness=1 
+helperWeight=180 # multiplier of how much more "important" the helper line detetion is
+wallThickness=[5,25] # min-max value of the distance between teh edges of the wall
+darkHelperDist=[8, 30] # min-max distance between the "dark" helper lines following the background path
+darkWhiteHelperDist=[1,17] # min-max distance between a "dark" helper line and the wall central helper line
+# Cost function
+wallCostWeight = 0.5 # defines the position of 0.5 probability value in the wall cost function, if set to 0.5 it is in the middle between the means of the distributions
+helperCostWeight = 0.001 # same as above, applies both to helper detection and to helper surfaces in the main detection	
