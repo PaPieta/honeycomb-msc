@@ -25,7 +25,7 @@ import time
 class stack3dSlicewiseSegmentation:
     """Performs layered surfaces honeycomb wall edges detection on a whole stack of images using a slicewise approach."""
 
-    def __init__(self, imgStack, wallDetector, helperDetector=None, interpStep=1, normalLinesRange=20, normalLinesNumPoints=40, returnHelperSurfaces=False, a_parabola=0.05):
+    def __init__(self, imgStack, wallDetector, helperDetector=None, interpStep=1, normalLinesRange=20, normalLinesNumPoints=40, returnHelperSurfaces=False, a_parabola=0.05, wallCostWeight=0.5, helperCostWeight=0.001):
         """Class initialization.\n
         Params:\n
         imgStack - 3D honecomb image stack\n
@@ -37,7 +37,9 @@ class stack3dSlicewiseSegmentation:
         normalLinesNumPoints - Number of interpolation points along a normal line\n
         Detection parameters:\n
         returnHelperSurfaces - if True, the method will also return the helper surfaces detected during segmentation\n
-        a_parabola - a parameter of y=ax^2+b equation, used to modify the helper detection cost function (to encoruage the line to stay in the center)
+        a_parabola - a parameter of y=ax^2+b equation, used to modify the helper detection cost function (to encoruage the line to stay in the center)\n
+        wallCostWeight - defines the position of 0.5 probability value in the wall cost function, if set to 0.5 it is in the middle between the means of the distributions\n
+        helperCostWeight - same as above, applies both to helper detection and to helper surfaces in the main detection
         """
         self.imgStack = imgStack
         self.wallDetector = wallDetector
@@ -46,6 +48,9 @@ class stack3dSlicewiseSegmentation:
         self.normalLinesRange = normalLinesRange
         self.normalLinesNumPoints = normalLinesNumPoints
         self.returnHelperSurfaces = returnHelperSurfaces
+
+        self.wallCostWeight = wallCostWeight
+        self.helperCostWeight = helperCostWeight
 
         self.vis_img = np.copy(imgStack)
         self.vis_img = helpers.rescaleImage(self.vis_img, 1, 255)
@@ -152,7 +157,7 @@ class stack3dSlicewiseSegmentation:
             unfolded_stack = hc.unfolded_img
 
             # Calculate cost
-            helperCost_stack = (1 - helpers.sigmoidProbFunction(unfolded_stack,self.means,self.variances, weight=0.001, visualize=visualize))*255
+            helperCost_stack = (1 - helpers.sigmoidProbFunction(unfolded_stack,self.means,self.variances, weight=self.helperCostWeight, visualize=visualize))*255
             helperCost_stack = scp.uniform_filter(helperCost_stack,size=3)
             # Add the parabola
             helperCost_stack = np.moveaxis((np.moveaxis(helperCost_stack,1,-1)+self.parVec),-1,1)
@@ -231,9 +236,11 @@ class stack3dSlicewiseSegmentation:
                             unfolded_helperStackFixed[idxList] = 1
 
             # Calculate cost
-            honeycombCost_stack = (1 - helpers.sigmoidProbFunction(unfolded_stack,self.means,self.variances, weight=0.5, visualize=visualize))*255
-            backgroundCost_stack = helpers.sigmoidProbFunction(unfolded_stack,self.means,self.variances, weight=0.001, visualize=visualize)*255
+            honeycombCost_stack = (1 - helpers.sigmoidProbFunction(unfolded_stack,self.means,self.variances, weight=self.wallCostWeight, visualize=visualize))*255
+            backgroundCost_stack = helpers.sigmoidProbFunction(unfolded_stack,self.means,self.variances, weight=self.helperCostWeight, visualize=visualize)*255
             
+            backgroundCost_stack = np.moveaxis((np.moveaxis(backgroundCost_stack,1,-1)+self.parVec),-1,1)
+
             zstackList = []
             for j in range(unfolded_stack.shape[0]):        
                 unfolded_img = unfolded_stack[j,:,:]
@@ -298,46 +305,53 @@ class stack3dSlicewiseSegmentation:
 
 
 if __name__ == "__main__":
-
+    # TODO: Add cost function weight as the parameter, try decreasing the number of points along a normal line
     # I = skimage.io.imread('data/29-2016_29-2016-60kV-zoom-center_recon.tif')
-    I = skimage.io.imread('data/29-2016_29-2016-60kV-LFoV-center-+-1-ring_recon.tif')
+    # I = skimage.io.imread('data/29-2016_29-2016-60kV-LFoV-center-+-1-ring_recon.tif')
     # I = skimage.io.imread('data/NL07C_NL07C-60kV-LFoV-center-+-1-ring_recon.tif')
+    # I = skimage.io.imread('data/NL07C_NL07C-60kV-zoom-center_recon.tif')
+    I = skimage.io.imread('data/PD27A-60kV-zoom-center_recon.tif')
 
-    I = I[380:620,:,:]
+    I = I[:950,:,:]
+    # I = I[:100,:,:]
 
     # Rotation (if needed)
-    # Inew = []
-    # for i in range(I.shape[0]):
-    #     Inew.append(scp.rotate(I[i,:,:],-15))
-    # I = np.array(Inew)
+    Inew = []
+    for i in range(I.shape[0]):
+        Inew.append(scp.rotate(I[i,:,:],-15))
+    I = np.array(Inew)
 
     ####### Params #######
     visualizeUnfolding = False # if True - visualizes the unfolding process steps
     #### Segmentation params
-    layerNum = 2
+    layerNum = 4
     # savePointsPath="data/cornerPoints/NLbig_z390-640_rot_-15.txt"
     # savePointsPath="data/cornerPoints/H29big_slicewise_z380-620.txt"
     # loadPointsPath="data/cornerPoints/NLbig_z390-640_rot_-15.txt"
-    loadPointsPath="data/cornerPoints/H29big_slicewise_z380-620.txt"
+    # loadPointsPath="data/cornerPoints/H29big_slicewise_z380-620.txt"
+    # savePointsPath = "data/cornerPoints/PD_z0-950_rot_-15.txt"
     savePointsPath = ""
-    # loadPointsPath = ""
+    loadPointsPath = "data/cornerPoints/PD_z0-950_rot_-15.txt"
     #### Unfolding params
-    interpStep = 1 # Distance between the interpolated points
-    normalLinesRange = 15 # Range (half of the length) of lines normal to interpolation points
+    interpStep = 2.5 # Distance between the interpolated points
+    normalLinesRange = 30 # Range (half of the length) of lines normal to interpolation points
     normalLinesNumPoints = 60 # Number of interpolation points along a normal line
     #### Detection params
     # In segmentation
-    returnHelperSurfaces = False, # if True, returns also dark helper surfaces from surface detection process
+    returnHelperSurfaces = False # if True, returns also dark helper surfaces from surface detection process
     a_parabola = 0.05 # a parameter of y=ax^2+b equation, used to modify the helper detection cost function
     # Helper
     helperDetectionSmoothness = 1 # how much in y direction the line can move with each step in the x direction (only int values)
     # Main detection
-    edgeSmoothness=1 
+    edgeSmoothness=2
     helperSmoothness=1 
-    helperWeight=100 # multiplier of how much more "important" the helper line detetion is
-    wallThickness=[4,16] # min-max value of the distance between teh edges of the wall
-    darkHelperDist=[8, 20] # min-max distance between the "dark" helper lines following the background path
-    darkWhiteHelperDist=[1,15] # min-max distance between a "dark" helper line and the wall central helper line
+    helperWeight=180 # multiplier of how much more "important" the helper line detetion is
+    wallThickness=[7,30] # min-max value of the distance between teh edges of the wall
+    darkHelperDist=[10, 35] # min-max distance between the "dark" helper lines following the background path
+    darkWhiteHelperDist=[1,20] # min-max distance between a "dark" helper line and the wall central helper line
+    # Cost function
+    wallCostWeight = 0.5 # defines the position of 0.5 probability value in the wall cost function, if set to 0.5 it is in the middle between the means of the distributions
+    helperCostWeight = 0.5 # same as above, applies both to helper detection and to helper surfaces in the main detection
 
     # Main wall detector instance
     wallDetector = honeycombSurfaceDetector.WallEdgeDetector(edgeSmoothness=edgeSmoothness, 
@@ -356,7 +370,9 @@ if __name__ == "__main__":
                                                         normalLinesRange=normalLinesRange, 
                                                         normalLinesNumPoints=normalLinesNumPoints, 
                                                         returnHelperSurfaces=returnHelperSurfaces, 
-                                                        a_parabola=a_parabola)
+                                                        a_parabola=a_parabola,
+                                                        wallCostWeight=wallCostWeight,
+                                                        helperCostWeight=helperCostWeight)
     # Run the segmentation
     layersList = honeycombSegmentation.segmentVolume(layerNum=layerNum, 
                                                     savePointsPath=savePointsPath, 
@@ -380,10 +396,10 @@ if __name__ == "__main__":
     # segmImg = helpers.layersToMatrix(layersList, I.shape)
 
     # plt.imshow(segmImg[15,:,:].transpose())
-    # plt.show()
+    # # plt.show()
 
-    # surf = helpers.layersToSurface(layersList)
-    # surf_array = np.array(surf)
-    # np.save("data/test.npy", surf_array)
+    surf = helpers.layersToSurface(layersList)
+    surf_array = np.array(surf)
+    np.save("data/PD_slicewise_z0-950_allSurf_raw.npy", surf_array)
 
     # # vwl.save_multSurf2vtk('data/surfaces/slicewise_z200New_allSurf.vtk', surf)
