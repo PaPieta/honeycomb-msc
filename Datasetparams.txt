@@ -2,17 +2,28 @@
 29-2016_29-2016-60kV-zoom-center_recon.tif
 
 I = I[200:780,:,:]
+loadPointsPath= "data/cornerPoints/H29slicewise_z200-780.txt"
+#### Unfolding params
+interpStep = 10/4 # Distance between the interpolated points
+normalLinesRange = 30 # Range (half of the length) of lines normal to interpolation points
+normalLinesNumPoints = 60 # Number of interpolation points along a normal line
+#### Detection params
+# In segmentation
+returnHelperSurfaces = False # if True, returns also dark helper surfaces from surface detection process
+a_parabola = 0.05 # a parameter of y=ax^2+b equation, used to modify the helper detection cost function
+# Helper
+helperDetectionSmoothness = 1 # how much in y direction the line can move with each step in the x direction (only int values)
+# Main detection
+edgeSmoothness=2 
+helperSmoothness=1 
+helperWeight=180 # multiplier of how much more "important" the helper line detetion is
+wallThickness=[6,25] # min-max value of the distance between teh edges of the wall
+darkHelperDist=[12, 35] # min-max distance between the "dark" helper lines following the background path
+darkWhiteHelperDist=[1,30] # min-max distance between a "dark" helper line and the wall central helper line
+# Cost function
+wallCostWeight = 0.5 # defines the position of 0.5 probability value in the wall cost function, if set to 0.5 it is in the middle between the means of the distributions
+helperCostWeight = 0.001 # same as above, applies both to helper detection and to helper surfaces in the main detection
 
-interpStep = 10/4 
-normalLinesRange = 40
-normalLinesNumPoints = 80
-
-darkSurfacesWeight = 300 # weight of dark surfaces cost 
-smoothness = [2,1] # honeycomb edge and dark surface smoothness term 
-honeycombSurfacesMargin = [6, 25] # min, max distance margin between the honeycomb edges
-darkSurfacesMargin = [12, 35] # min, max distance margin between the dark helper surfaces
-darkToHoneycombMinMargin = 1 # min distance between the helper surface and honeycomb edge
-darkWhiteHelperSurfacesMargin = [1,24] # min, max distance margin between the dark helper surface and white helper surf
 
 
 #####
@@ -26,7 +37,7 @@ normalLinesRange = 15 # Range (half of the length) of lines normal to interpolat
 normalLinesNumPoints = 60 # Number of interpolation points along a normal line
 #### Detection params
 # In segmentation
-returnHelperSurfaces = False, # if True, returns also dark helper surfaces from surface detection process
+returnHelperSurfaces = False # if True, returns also dark helper surfaces from surface detection process
 a_parabola = 0.05 # a parameter of y=ax^2+b equation, used to modify the helper detection cost function
 # Helper
 helperDetectionSmoothness = 1 # how much in y direction the line can move with each step in the x direction (only int values)
@@ -52,7 +63,7 @@ normalLinesRange = 15 # Range (half of the length) of lines normal to interpolat
 normalLinesNumPoints = 60 # Number of interpolation points along a normal line
 #### Detection params
 # In segmentation
-returnHelperSurfaces = False, # if True, returns also dark helper surfaces from surface detection process
+returnHelperSurfaces = False # if True, returns also dark helper surfaces from surface detection process
 a_parabola = 0.05 # a parameter of y=ax^2+b equation, used to modify the helper detection cost function
 # Helper
 helperDetectionSmoothness = 1 # how much in y direction the line can move with each step in the x direction (only int values)
@@ -62,7 +73,7 @@ helperSmoothness=1
 helperWeight=100 # multiplier of how much more "important" the helper line detetion is
 wallThickness=[4,16] # min-max value of the distance between teh edges of the wall
 darkHelperDist=[6, 20] # min-max distance between the "dark" helper lines following the background path
-darkWhiteHelperDist=[1,10] # min-max distance between a "dark" helper line and the wall central helper line
+darkWhiteHelperDist=[2,10] # min-max distance between a "dark" helper line and the wall central helper line
 # Cost function
 wallCostWeight = 0.5 # defines the position of 0.5 probability value in the wall cost function, if set to 0.5 it is in the middle between the means of the distributions
 helperCostWeight = 0.001 # same as above, applies both to helper detection and to helper surfaces in the main detection

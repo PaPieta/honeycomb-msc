@@ -12,6 +12,16 @@ import scipy.ndimage as ndimage
 import scipy.interpolate
 import helpers
 import vtk_write_lite as vwl
+import scipy.linalg
+
+def regularization_matrix(N, alpha, beta):
+    """An NxN matrix for imposing elasticity and rigidity to snakes.
+    Arguments: alpha is weigth for second derivative (elasticity),
+    beta is weigth for (-)fourth derivative (rigidity)."""
+    column = np.zeros(N)
+    column[[-2,-1,0,1,2]] = alpha*np.array([0,1,-2,1,0]) + beta*np.array([-1,4,-6,4,-1])
+    A = scipy.linalg.toeplitz(column)
+    return(scipy.linalg.inv(np.eye(N)-A))
 
 
 def npy_to_surf_list(surf_array_obj):
@@ -82,6 +92,7 @@ def surf_normals_surf_intersect(surf1, surf1_normals, surf2, surf2_normals, epsi
     surf1, surf1_normals - surface and its normal vector - on this suface the intersection will be found\n
     surf2, surf2_normals - surface and its normal vector - this surface will be treated as the ray start
     """
+    # Source: https://rosettacode.org/wiki/Find_the_intersection_of_a_line_with_a_plane#Python
     ndotu = np.sum(surf1_normals*surf2_normals,axis=0) #dot product for each matrix element
     if np.any(abs(ndotu)<epsilon):
         raise RuntimeError("no intersection or line is within plane for one of the points")
@@ -400,50 +411,82 @@ def fem_model_shell_list(shell_array_list, part_file_path, master_file_path, sav
 
 if __name__ == "__main__":
     # Open raw segmentation surfaces
-    # surf_array = np.load('data/slicewise_z30_1Surf_raw.npy')
-    # surf_array_obj = np.load('data/slicewise_z200New_allSurf_raw.npy', allow_pickle=True)
-    # surf_array_obj = np.load('data/slicewise_z250-750_allSurf_raw3.npy', allow_pickle=True)
-    # surf_array_obj = np.load('data/slicewise_z200-780_allSurf_raw.npy', allow_pickle=True)
-    # surf_array_obj = np.load('data/H29_test_30.npy', allow_pickle=True)
-    # surf_array_obj = np.load('data/H29big_slicewise_z380-620_allSurf_raw_3.npy', allow_pickle=True)
-    # surf_array_obj = np.load('data/NLbig_slicewise_z390-640_allSurf_raw_2.npy', allow_pickle=True)
-    # surf_array_obj = np.load('data/NL_slicewise_z340-790_allSurf_raw_2.npy', allow_pickle=True)
-    surf_array_obj = np.load('data/PD_slicewise_z0-950_allSurf_raw.npy', allow_pickle=True)
-    # pixelSize = 0.0078329 #mm 
+    surf_array_obj = np.load('data/rawFinal/slicewise_z200-780_allSurf_raw.npy', allow_pickle=True)
+    # surf_array_obj = np.load('data/H29_slicewise_z200-780_allSurf_raw.npy', allow_pickle=True)
+    # surf_array_obj = np.load('data/rawFinal/H29big_slicewise_z380-620_allSurf_raw.npy', allow_pickle=True)
+    # surf_array_obj = np.load('data/H29big_slicewise_z380-620_allSurf_raw.npy', allow_pickle=True)
+    # surf_array_obj = np.load('data/rawFinal/NLbig_slicewise_z390-640_allSurf_raw_2.npy', allow_pickle=True)
+    # surf_array_obj = np.load('data/NLbig_slicewise_z390-640_rot_-15_allSurf_raw.npy', allow_pickle=True)
+    # surf_array_obj = np.load('data/rawFinal/NL_slicewise_z340-790_allSurf_raw_2.npy', allow_pickle=True)
+    # surf_array_obj = np.load('data/NL_slicewise_z340-790_rot_-15_allSurf_raw.npy', allow_pickle=True)
+    # surf_array_obj = np.load('data/rawFinal/PD_slicewise_z0-950_allSurf_raw.npy', allow_pickle=True)
+    # surf_array_obj = np.load('data/rawFinal/PBbig_slicewise_z250-780_allSurf_raw.npy', allow_pickle=True)
+    pixelSize = 0.0078329 #mm 
     # pixelSize = 0.017551 #mm 
     # pixelSize = 0.031504 #mm 
     # pixelSize = 0.015172 #mm 
-    pixelSize = 0.015752 #mm 
+    # pixelSize = 0.015752 #mm 
+    # pixelSize = 0.032761 #mm 
+    # pixelSize = 1 # For ParaView
+
+    step = [3,3]
 
     # Retrieve list of surfaces from the object array
     surf_array_list = npy_to_surf_list(surf_array_obj)
 
     shell_array_list = []
-    plt.figure()
+    # plt.figure()
+    minList = []
+    maxList = []
     for i in range(int(len(surf_array_list)/2)):
         surf2_array = np.array([surf_array_list[i*2],surf_array_list[(i*2)+1]])
         # surf2_array = surf2_array[:,:,:,:238]
         # [surf2_array, shell_array] = surf_to_shell_interp(surf2_array,step=[3,3],sigma=2,pixel_size=pixelSize,return_surf=True)
         # [surf2_array, shell_array] = surf_to_shell_interp2(surf2_array,step=[3,3],sigma=4,pixel_size=pixelSize,return_surf=True)
-        [surf2_array, shell_array] = surf_to_shell_interp3(surf2_array,step=[12,12],sigma=2,pixel_size=pixelSize,return_surf=True)
+        [surf2_array, shell_array] = surf_to_shell_interp3(surf2_array,step=step,sigma=1,pixel_size=pixelSize,return_surf=True)
         # shell_array = surf_to_shell_simple(surf2_array)
         shell_array_list.append(shell_array)
         surf_array_list[i*2] = surf2_array[0,:,:,:]
         surf_array_list[(i*2)+1] = surf2_array[1,:,:,:]
 
+        minList.append(np.min(shell_array[3,:,:]))
+        maxList.append(np.max(shell_array[3,:,:]))
+
         # shell_array[3,:,:] = np.where(shell_array[3,:,:]>0.15, 0.15, shell_array[3,:,:])
         # shell_array[3,:,:] = np.where(shell_array[3,:,:]<0.06, 0.06, shell_array[3,:,:])
         # Visualization
-        plt.subplot(4,2,i+1)
-        plt.imshow(shell_array[3,:,:].transpose(), cmap='jet')
-        plt.colorbar()
+        # plt.subplot(4,2,i+1)
+    #     plt.subplot(2,2,i+1)
+    #     plt.imshow(shell_array[3,:,:].transpose(), cmap='jet')
+    #     plt.colorbar()
+    # plt.show()
+
+    # Plotting thickness
+    if len(shell_array_list) == 4:
+        fig, ax = plt.subplots(2,2,gridspec_kw={'width_ratios': [1, 2.2]})
+        posLookup = [0,1,3,2]
+    else:
+        fig, ax = plt.subplots(4,2)
+        posLookup = [0,1,2,3,7,6,5,4]
+    minVal = np.min(np.array(minList))
+    maxVal = np.max(np.array(maxList))
+    for i in range(len(shell_array_list)):
+        im = ax.flat[posLookup[i]].imshow(shell_array_list[i][3,:,:].transpose(), vmin=minVal,vmax=maxVal, cmap='jet',extent=[0,step[0]*pixelSize*shell_array_list[i][0,:,:].shape[0],0,step[1]*pixelSize*shell_array_list[i][0,:,:].shape[1]])
+        ax.flat[posLookup[i]].set_title(f'Wall  {i+1}',fontweight="bold")
+        ax.flat[posLookup[i]].set_xlabel("Width [mm]")
+        ax.flat[posLookup[i]].set_ylabel("Height [mm]")
+        # ax.flat[posLookup[i]].set_xticks([0,100,200])
+    fig.subplots_adjust(right=0.8)
+    cbar_ax = fig.add_axes([0.82, 0.15, 0.05, 0.7])
+    cbar = fig.colorbar(im, cax=cbar_ax)
+    cbar.set_label('Wall thickness [mm]', rotation=270, labelpad=10)
+    # plt.tight_layout()
     plt.show()
+    # vwl.save_multSurf2vtk('data/surfaces/H29_slicewise_z200-780_1px.vtk', surf_array_list)
+    # vwl.save_multSurf2vtk('data/surfaces/H29_slicewise_z200-780_center_coloured.vtk', shell_array_list)
 
-    vwl.save_multSurf2vtk('data/surfaces/PD_slicewise_z0-950.vtk', surf_array_list)
-    vwl.save_multSurf2vtk('data/surfaces/PD_slicewise_z0-950_center.vtk', shell_array_list)
+    # partFilePath = "data/abaqusShells/dummyPart.inp"
+    # masterFilePath = "data/abaqusShells/dummyMaster.inp"
+    # savePath = "data/abaqusShells/H29_slicewise_z200-780_4x_meanThickness/"
 
-    partFilePath = "data/abaqusShells/dummyPart.inp"
-    masterFilePath = "data/abaqusShells/dummyMaster.inp"
-    savePath = "data/abaqusShells/PD_slicewise_z0-950_4x/"
-
-    fem_model_shell_list(shell_array_list, partFilePath, masterFilePath, savePath)
+    # fem_model_shell_list(shell_array_list, partFilePath, masterFilePath, savePath)

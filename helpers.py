@@ -46,7 +46,7 @@ def gaussianProbFunction(img, mean, variance):
     Params:\n
     img - image to calculate cost on\n
     mean - mean of the gaussians\n
-    variance - variance of the gaussians (not used in this version).
+    variance - variance of the gaussians.
     """
     img = np.abs(img - mean)
     cost = np.exp(-0.5*((img/np.sqrt(variance))**2.0))
@@ -78,7 +78,7 @@ def sigmoidProbFunction(img, mean, variance, weight, visualize=False):
     scale = np.log(1/gaussCenterProb - 1)/(mean[0]-np.mean(mean))
     # Sigmoid-based cost
     cost =  1/(1+np.exp(-scale*(img-center)))
-
+    
     if visualize == True:
         
         x0 = np.linspace(mean[0] - 3*sigma[0], mean[0] + 3*sigma[0], 100)
@@ -450,6 +450,8 @@ def getLinesUniformInterpSpacing(lines_list, zStep=1, xStep=1):
         u = np.hstack([[0],u])
         # Interpolate the x-coordinates independently with respect to the new coordinates.
         t = np.arange(0,u.max(),xStep)
+        xn = np.interp(t, u, x)
+        yn = np.interp(t, u, y)
         lengthList.append(t.shape[0])
     
     xPoints = int(np.round(np.mean(np.array(lengthList))))
