@@ -2,9 +2,8 @@
 """
 Created on Tue Jan 18 11:20:37 2022
 
-@author: pawel
+@author: Pawel Pieta s202606@student.dtu.dk
 """
-
 
 import numpy as np 
 import matplotlib.pyplot as plt
@@ -13,9 +12,7 @@ import scipy
 import cv2 as cv
 from scipy.interpolate import UnivariateSpline
 
-import helpers
-
-class HoneycombUnfold2d:
+class Unfold2d:
     """Set of methods for unfolding and folding a slice of the honeycomb scan
     for purposes of layered surfaces detection on a 2D image.\n
     Pipeline of the segmentation process:\n
@@ -93,7 +90,6 @@ class HoneycombUnfold2d:
         Params:\n
         step - interpolation step distance
         """
-        # self.lines_interp = helpers.getLinesUniformInterpSpacing(self.lines, zStep=1, xStep=step)
 
         #Remove repetitions
         points = np.unique(self.lines,axis=1)

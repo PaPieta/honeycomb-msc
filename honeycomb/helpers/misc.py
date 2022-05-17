@@ -2,10 +2,9 @@
 """
 Created on Sun Jan 23 16:45:10 2022
 
-@author: pawel
+@author: Pawel Pieta s202606@student.dtu.dk
 """
 
-from random import gauss
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.stats as stats

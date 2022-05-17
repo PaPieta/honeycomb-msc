@@ -4,6 +4,7 @@
 Created on Tue Sep 17 16:06:05 2019
 
 @author: vand
+@modifications: Pawel Pieta s202606@student.dtu.dk
 """
 
 import numpy as np
@@ -119,7 +120,7 @@ def save_multSurf2vtk(filename, surfacesList):
      
     with open(filename, 'w') as f:
         f.write('# vtk DataFile Version 3.0\n')
-        f.write('saved from matlab using save_surf2vtk\n')
+        f.write('saved from matlab using save_multSurf2vtk\n')
         f.write('ASCII\n')
         f.write('DATASET POLYDATA\n')
         f.write('POINTS {} float\n'.format(verticesFull.shape[0]))

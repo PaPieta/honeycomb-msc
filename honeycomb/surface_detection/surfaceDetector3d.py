@@ -2,7 +2,7 @@
 """
 Created on Thu Mar 24 17:21:39 2022
 
-@author: pawel
+@author: Pawel Pieta s202606@student.dtu.dk
 """
 
 import numpy as np 
@@ -21,7 +21,7 @@ class WallCenterDetector:
         """
         self.smoothness = smoothness
 
-    def detect(self, honeycombCost, visualize=True, builderType = 'default'):
+    def detect(self, honeycombCost, visualize=True, builderType='default'):
         """Performs central surface detection on the provided cost image
         Params:\n
         honeycombCost - 2D cost function image for the honeycomb-targeting surfaces.\n
@@ -29,7 +29,8 @@ class WallCenterDetector:
         builderType - default or parallel_{2,4,6}, number represents the number of used cores.
         """
 
-        layers = [slgbuilder.GraphObject(honeycombCost)]
+        honeycombCostShifted = np.moveaxis(honeycombCost,0,1)
+        layers = [slgbuilder.GraphObject(honeycombCostShifted)]
         if builderType == 'default':
             helper = slgbuilder.MaxflowBuilder(capacity_type=np.float64)
         elif builderType == 'parallel_2':
@@ -57,10 +58,10 @@ class WallCenterDetector:
         if visualize == True:
             plt.figure()
             ax = plt.gca()
-            im = plt.imshow(honeycombCost)
+            im = plt.imshow(honeycombCost[0,:,:])
             plt.axis('off')
             for i in range(len(segmentation_lines)):
-                    plt.plot(segmentation_lines[i], 'r')
+                    plt.plot(segmentation_lines[i][0,:], 'r')
             divider = make_axes_locatable(ax)
             cax = divider.append_axes("right", size="5%", pad=0.05)
             plt.colorbar(im, cax=cax)
@@ -90,7 +91,7 @@ class WallEdgeDetector:
         self.darkHelperDist = darkHelperDist
         self.darkWhiteHelperDist = darkWhiteHelperDist
 
-    def detect(self, unfolded_img, honeycombCost, backgroundCost, visualize=False, return_helper_surfaces=False, builderType = 'default'):
+    def detect(self, unfolded_img, honeycombCost, backgroundCost, visualize=False, return_helper_surfaces=False, builderType='default'):
         """ Performs detection of the honeycomb wall edges.\n
         Params:\n
         unfolded_img - clean unfolded image
@@ -103,9 +104,11 @@ class WallEdgeDetector:
 
         darkToHoneycombMinMargin = 1 # min distance between the helper surface and honeycomb edge
 
-        layers = [slgbuilder.GraphObject(0*honeycombCost), slgbuilder.GraphObject(0*honeycombCost), # no on-surface cost
-                slgbuilder.GraphObject(self.helperWeight*backgroundCost), slgbuilder.GraphObject(self.helperWeight*backgroundCost), # extra 2 dark lines
-                slgbuilder.GraphObject(self.helperWeight*1.5*(honeycombCost))] # Extra white line 
+        honeycombCostShifted = np.moveaxis(honeycombCost,0,1)
+        backgroundCostShifted = np.moveaxis(backgroundCost,0,1)
+        layers = [slgbuilder.GraphObject(0*honeycombCostShifted), slgbuilder.GraphObject(0*honeycombCostShifted), # no on-surface cost
+                slgbuilder.GraphObject(self.helperWeight*backgroundCostShifted), slgbuilder.GraphObject(self.helperWeight*backgroundCostShifted), # extra 2 dark lines
+                slgbuilder.GraphObject(self.helperWeight*1.5*(honeycombCostShifted))] # Extra white line 
         if builderType == 'default':
             helper = slgbuilder.MaxflowBuilder(capacity_type=np.float64)
         elif builderType == 'parallel_2':
@@ -119,8 +122,8 @@ class WallEdgeDetector:
         helper.add_objects(layers)
 
         ## Adding regional costs, 
-        helper.add_layered_region_cost(layers[0], 255-honeycombCost, honeycombCost)
-        helper.add_layered_region_cost(layers[1], honeycombCost, 255-honeycombCost)
+        helper.add_layered_region_cost(layers[0], 255-honeycombCostShifted, honeycombCostShifted)
+        helper.add_layered_region_cost(layers[1], honeycombCostShifted, 255-honeycombCostShifted)
 
         ## Adding geometric constrains
         # Blocks crossing from bottom to top of the image
@@ -152,12 +155,12 @@ class WallEdgeDetector:
         ## Unfolded image visualization
         if visualize == True:
             plt.figure()
-            plt.imshow(unfolded_img, cmap='gray')
+            plt.imshow(unfolded_img[0,:,:], cmap='gray')
             for i in range(len(segmentation_lines)):
                 if i < 2:
-                    segm_plot, = plt.plot(segmentation_lines[i], 'r')
+                    segm_plot, = plt.plot(segmentation_lines[i][0,:], 'r')
                 else:
-                    helper_plot, = plt.plot(segmentation_lines[i], 'b')
+                    helper_plot, = plt.plot(segmentation_lines[i][0,:], 'b')
 
             plt.legend([segm_plot,helper_plot],["Detected honeycomb wall edges","detected helper surfaces"])
             plt.show()

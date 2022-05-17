@@ -2,28 +2,26 @@
 """
 Created on Thu Jan 13 17:10:52 2022
 
-@author: pawel
+@author: Pawel Pieta s202606@student.dtu.dk
 """
 
-from operator import truediv
 import numpy as np 
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import skimage.io 
 import scipy.ndimage as scp
-import slgbuilder
 import copy
 from skimage.morphology import closing
 import os
 
-from honeycombUnfold2d import HoneycombUnfold2d
-import honeycomb2dSurfaceDetector
-import helpers
+from honeycomb.unfolding.unfold2d import Unfold2d
+from honeycomb.surface_detection import surfaceDetector2d
+from honeycomb.helpers import misc
 
 import time
 
 
-class sliceSegmentation:
+class SegmentationPipeline:
     """Performs layered surfaces honeycomb wall edges detection on a single slice."""
 
     def __init__(self, imgSlice, wallDetector, helperDetector=None, interpStep=1, normalLinesRange=20, normalLinesNumPoints=40, returnHelperSurfaces=False, a_parabola=0.05, wallCostWeight=0.5, helperCostWeight=0.001):
@@ -54,10 +52,10 @@ class sliceSegmentation:
         self.helperCostWeight = helperCostWeight
 
         self.vis_img = np.copy(imgSlice)
-        self.vis_img = helpers.rescaleImage(self.vis_img, 1, 255)
+        self.vis_img = misc.rescaleImage(self.vis_img, 1, 255)
 
         ## Calculate image gaussian model 
-        self.means, self.variances = helpers.imgGaussianModel(imgSlice)
+        self.means, self.variances = misc.imgGaussianModel(imgSlice)
 
         # Prepare parabola vector
         self.parVec = np.arange(-normalLinesNumPoints/2,normalLinesNumPoints/2,1)
@@ -67,7 +65,7 @@ class sliceSegmentation:
         self.hcHelpList = []
         self.layersList = []
 
-    def __saveHcPoints(self, savePath):
+    def saveHcPoints(self, savePath):
         """Private function. Used for saving the points marked by the user into a txt file\n
         Params:\n
         savePath - Full file save path
@@ -85,7 +83,7 @@ class sliceSegmentation:
                 for k in range(line.shape[1]):
                     f.write(f"{line[0,k]} {line[1,k]}\n")
 
-    def __loadHcPoints(self, loadPath):
+    def loadHcPoints(self, loadPath):
         """Private function. Used for loading from txt file ponts previously marked by the user.\n
         Params:\n
         savePath - Full file load path
@@ -113,7 +111,7 @@ class sliceSegmentation:
         
         self.hcList[hcIdx].lines = line
 
-    def __unfoldSlice(self):
+    def unfoldSlice(self):
         """Private function. Loops through the honeycomb wall objects and performs full unfolding process.
         """
 
@@ -136,7 +134,7 @@ class sliceSegmentation:
             print("Image unfolded")
             self.hcList[i] = hc
 
-    def __detectHelperWallCenter(self, visualize=True):
+    def detectHelperWallCenter(self, visualize=True):
         """Private function. Detects the approximation of the center of the honeycomb wall. 
         Used for modification of the cost fuction at the final segmenatation step\n
         Params:\n
@@ -151,7 +149,7 @@ class sliceSegmentation:
             unfolded_img = hc.unfolded_img
 
             # Calculate cost
-            helperCost = (1 - helpers.sigmoidProbFunction(unfolded_img,self.means,self.variances, weight=self.helperCostWeight, visualize=visualize))*255
+            helperCost = (1 - misc.sigmoidProbFunction(unfolded_img,self.means,self.variances, weight=self.helperCostWeight, visualize=visualize))*255
             helperCost = scp.uniform_filter(helperCost,size=3)
             # Add the parabola
             helperCost = np.moveaxis((np.moveaxis(helperCost,0,-1)+self.parVec),-1,0)
@@ -177,7 +175,7 @@ class sliceSegmentation:
             self.hcHelpList[i] = hcHelp
             print(f"Helper image {i} unfolded")
 
-    def __detectWallEdges(self, visualize=True):
+    def detectWallEdges(self, visualize=True):
         """Private function. Performs the final detection of the honeycomb wall edges for all marked walls.
         Params:\n
         visualize - If True - shows the results of detection
@@ -223,8 +221,8 @@ class sliceSegmentation:
                             unfolded_helperFixed[idxList] = 1
 
             # Calculate cost
-            honeycombCost = (1 - helpers.sigmoidProbFunction(unfolded_img,self.means,self.variances, weight=self.wallCostWeight, visualize=visualize))*255
-            backgroundCost = helpers.sigmoidProbFunction(unfolded_img,self.means,self.variances, weight=self.helperCostWeight, visualize=visualize)*255
+            honeycombCost = (1 - misc.sigmoidProbFunction(unfolded_img,self.means,self.variances, weight=self.wallCostWeight, visualize=visualize))*255
+            backgroundCost = misc.sigmoidProbFunction(unfolded_img,self.means,self.variances, weight=self.helperCostWeight, visualize=visualize)*255
             
             backgroundCost = np.moveaxis((np.moveaxis(backgroundCost,0,-1)+self.parVec),-1,0)
 
@@ -243,7 +241,7 @@ class sliceSegmentation:
                 plt.colorbar(im, cax=cax)
                 plt.show()
 
-            unfolded_img = helpers.rescaleImage(unfolded_img, 1, 255)
+            unfolded_img = misc.rescaleImage(unfolded_img, 1, 255)
 
             ### Layered surfaces detection
             segmentation_surfaces = self.wallDetector.detect(unfolded_img, honeycombCost, backgroundCost,
@@ -262,27 +260,27 @@ class sliceSegmentation:
         """
         
         # Preparing separate unfolding objects for each wall
-        self.hcList = [HoneycombUnfold2d(self.imgSlice, self.vis_img, visualize=visualizeUnfolding) for i in range(layerNum)]
+        self.hcList = [Unfold2d(self.imgSlice, self.vis_img, visualize=visualizeUnfolding) for i in range(layerNum)]
 
         #Defining the corner points by loading or manual pointing
         if loadPointsPath == '':
             for hc in self.hcList:
                 self.vis_img = hc.draw_corners()
         else:
-            self.__loadHcPoints(loadPointsPath)
+            self.loadHcPoints(loadPointsPath)
 
         # Saving the points
         if savePointsPath != '':
-            self.__saveHcPoints(savePointsPath)
+            self.saveHcPoints(savePointsPath)
 
         # Unfolding the wall images
-        self.__unfoldSlice()
+        self.unfoldSlice()
 
         if self.helperDetector is not None:
-            self.__detectHelperWallCenter(visualize=visualize)
+            self.detectHelperWallCenter(visualize=visualize)
 
         # Final detection
-        self.__detectWallEdges(visualize=visualize)
+        self.detectWallEdges(visualize=visualize)
        
         return self.layersList
 
@@ -328,30 +326,30 @@ if __name__ == "__main__":
     helperCostWeight = 0.001 # same as above, applies both to helper detection and to helper surfaces in the main detection
 
     # Main wall detector instance
-    wallDetector = honeycomb2dSurfaceDetector.WallEdgeDetector(edgeSmoothness=edgeSmoothness, 
-                                                            helperSmoothness=helperSmoothness, 
-                                                            helperWeight=helperWeight, 
-                                                            wallThickness=wallThickness,
-                                                            darkHelperDist=darkHelperDist, 
-                                                            darkWhiteHelperDist=darkWhiteHelperDist)
+    wallDetector = surfaceDetector2d.WallEdgeDetector(edgeSmoothness=edgeSmoothness, 
+                                                    helperSmoothness=helperSmoothness, 
+                                                    helperWeight=helperWeight, 
+                                                    wallThickness=wallThickness,
+                                                    darkHelperDist=darkHelperDist, 
+                                                    darkWhiteHelperDist=darkWhiteHelperDist)
     # Helper wall center detector instance
-    helperDetector = honeycomb2dSurfaceDetector.WallCenterDetector(smoothness=helperDetectionSmoothness)
+    helperDetector = surfaceDetector2d.WallCenterDetector(smoothness=helperDetectionSmoothness)
     # Slicewise segmentation instance
-    honeycombSegmentation = sliceSegmentation(imgSlice=I_2d, 
-                                                        wallDetector=wallDetector, 
-                                                        helperDetector=helperDetector, 
-                                                        interpStep=interpStep, 
-                                                        normalLinesRange=normalLinesRange, 
-                                                        normalLinesNumPoints=normalLinesNumPoints, 
-                                                        returnHelperSurfaces=returnHelperSurfaces, 
-                                                        a_parabola=a_parabola,
-                                                        wallCostWeight=wallCostWeight,
-                                                        helperCostWeight=helperCostWeight)
-    # Run the segmentation
-    layersList = honeycombSegmentation.segmentVolume(layerNum=layerNum, 
-                                                    savePointsPath=savePointsPath, 
-                                                    loadPointsPath=loadPointsPath, 
-                                                    visualize=visualizeUnfolding)
+    pipeline = SegmentationPipeline(imgSlice=I_2d, 
+                                    wallDetector=wallDetector, 
+                                    helperDetector=helperDetector, 
+                                    interpStep=interpStep, 
+                                    normalLinesRange=normalLinesRange, 
+                                    normalLinesNumPoints=normalLinesNumPoints, 
+                                    returnHelperSurfaces=returnHelperSurfaces, 
+                                    a_parabola=a_parabola,
+                                    wallCostWeight=wallCostWeight,
+                                    helperCostWeight=helperCostWeight)
+# Run the segmentation
+    layersList = pipeline.segmentVolume(layerNum=layerNum, 
+                                        savePointsPath=savePointsPath, 
+                                        loadPointsPath=loadPointsPath, 
+                                        visualize=visualizeUnfolding)
 
     plt.figure()
     plt.imshow(I_2d, cmap='gray')

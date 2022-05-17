@@ -2,7 +2,7 @@
 """
 Created on Wed Feb 09 15:12:29 2022
 
-@author: pawel
+@author: Pawel Pieta s202606@student.dtu.dk
 """
 
 import numpy as np
@@ -10,9 +10,11 @@ import matplotlib.pyplot as plt
 import os
 import scipy.ndimage as ndimage
 import scipy.interpolate
-import helpers
-import vtk_write_lite as vwl
 import scipy.linalg
+
+from honeycomb.helpers import misc
+from honeycomb.helpers import vtk_write_lite as vwl
+
 
 def regularization_matrix(N, alpha, beta):
     """An NxN matrix for imposing elasticity and rigidity to snakes.
@@ -22,7 +24,6 @@ def regularization_matrix(N, alpha, beta):
     column[[-2,-1,0,1,2]] = alpha*np.array([0,1,-2,1,0]) + beta*np.array([-1,4,-6,4,-1])
     A = scipy.linalg.toeplitz(column)
     return(scipy.linalg.inv(np.eye(N)-A))
-
 
 def npy_to_surf_list(surf_array_obj):
     """Converts the numpy "object array" containing segmeted surfaces to a list of surfaces.\n
@@ -39,22 +40,6 @@ def npy_to_surf_list(surf_array_obj):
         surf_array_list.append(np.array(surf_array))
 
     return surf_array_list
-
-
-def surf_to_shell_simple(surf2_array):
-    """Calculates a shell central surface (consisting of 3D position and thickness values), from array with 2 surfaces.\n
-    Params:\n
-    surf2_array - array with 2 surfaces, dim: (2,3,x,z)
-    """
-    # Calculate  center position and thickness
-    shell_array = np.empty((4,surf2_array.shape[2],surf2_array.shape[3]))
-    for i in range(surf2_array.shape[2]):
-        for j in range(surf2_array.shape[3]):
-            shell_array[:3,i,j] = np.mean((surf2_array[0,:,i,j],surf2_array[1,:,i,j]), axis=0)
-            shell_array[3,i,j] = np.linalg.norm(surf2_array[0,:,i,j]-surf2_array[1,:,i,j])
-
-    return shell_array
-
 
 def surf_3d_normals(surf_array):
     """Calculates a normals matrix from a surface. The created lines are normal to the surface defined by the neighbours of each point.\n
@@ -85,7 +70,6 @@ def surf_3d_normals(surf_array):
 
     return normalsMat
 
-
 def surf_normals_surf_intersect(surf1, surf1_normals, surf2, surf2_normals, epsilon=1e-6):
     """Calcualtes intersection points between a surface and rays defined by normal vectors of other surface\n
     Params:\n
@@ -101,10 +85,10 @@ def surf_normals_surf_intersect(surf1, surf1_normals, surf2, surf2_normals, epsi
     Psi = w + si * surf2_normals + surf1
     return Psi
 
-
 def surf_to_shell_interp(surf2_array,step=[3,3],sigma=2,pixel_size=1,return_surf=False):
-    """Performs smoothing and interpolation of the provided surface pair. Next, calculates the shell array 
-    by finding a mean of the surfaces and thickness using surface normals. 
+    """Performs smoothing and initial interpolation of the provided surface pair. Next, calculates the central surface 
+    by finding a mean of the surfaces and vectors normal to all thre surfaces. Finally, resamples the normals and surfaces
+    to a desired step and finds the thickness using the normals.
     Returns the shell surface and the original interpolated surface pair (if requested)\n
     Params:\n
     surf2_array - array with 2 surfaces, dim: (2,3,x,z)\n
@@ -114,56 +98,11 @@ def surf_to_shell_interp(surf2_array,step=[3,3],sigma=2,pixel_size=1,return_surf
     return_surf - if True returns shell and interpolated surface pair in a list, if False returns only shell
     """
     # Smooth surfaces
-    surf2_array[0,1,:,:] = ndimage.gaussian_filter(surf2_array[0,1,:,:], sigma=(sigma, sigma), order=0)
-    surf2_array[1,1,:,:] = ndimage.gaussian_filter(surf2_array[1,1,:,:], sigma=(sigma, sigma), order=0)
-
-    surf2_array = helpers.getMultSurfUniformSpacing(surf2_array, zStep=step[1], xStep=step[0])
-
-    # Calculate central surface
-    center_surf_array = np.mean(surf2_array,axis=0)
-
-    surfNormalsMat1 = surf_3d_normals(surf2_array[0,:,:,:])
-    surfNormalsMat2 = surf_3d_normals(surf2_array[1,:,:,:])
-    centerNormalsMat = surf_3d_normals(center_surf_array)
-
-    surfIntersect1 = surf_normals_surf_intersect(surf2_array[0,:,:,:],surfNormalsMat1,center_surf_array,centerNormalsMat)
-    surfIntersect2 = surf_normals_surf_intersect(surf2_array[1,:,:,:],surfNormalsMat2,center_surf_array,centerNormalsMat)
-
-    # Calculate thickness
-    thickness_surf_array = np.apply_along_axis(np.linalg.norm,0,surfIntersect1-surfIntersect2)
-
-    # Combine results to shell
-    shell_array = np.concatenate((center_surf_array,np.array([thickness_surf_array])), axis=0)
-
-    # Resize
-    surf2_array = surf2_array*pixel_size
-    shell_array = shell_array*pixel_size
-
-    if return_surf == True:
-        return [surf2_array, shell_array]
-    else:
-        return shell_array
-
-def surf_to_shell_interp3(surf2_array,step=[3,3],sigma=2,pixel_size=1,return_surf=False):
-    """Performs smoothing and interpolation of the provided surface pair. Next, calculates the shell array 
-    by finding a mean of the surfaces and thickness using surface normals. 
-    Returns the shell surface and the original interpolated surface pair (if requested)\n
-    Params:\n
-    surf2_array - array with 2 surfaces, dim: (2,3,x,z)\n
-    step - 2 element array with step in x and z direction (in pixels)\n
-    sigma - smoothing coefficient (in pixels)\n
-    pixel_size - multiplier for correct data representation\n
-    return_surf - if True returns shell and interpolated surface pair in a list, if False returns only shell
-    """
-    # Smooth surfaces
-    # surf2_array[0,1,:,:] = ndimage.gaussian_filter(surf2_array[0,1,:,:], sigma=(sigma, sigma), order=0)
-    # surf2_array[1,1,:,:] = ndimage.gaussian_filter(surf2_array[1,1,:,:], sigma=(sigma, sigma), order=0)
     surf2_array[0,:2,:,:] = ndimage.gaussian_filter(surf2_array[0,:2,:,:], sigma=(0, sigma, sigma), order=0)
     surf2_array[1,:2,:,:] = ndimage.gaussian_filter(surf2_array[1,:2,:,:], sigma=(0, sigma, sigma), order=0)
 
     # Initial interpolation to fix uneven mesh
-    # surf2_array = helpers.getMultSurfUniformSpacing(surf2_array, zStep=(np.max(surf2_array[:,2,:,:])+1)/surf2_array.shape[3], xStep=(np.max(surf2_array[:,0,:,:])+1)/surf2_array.shape[2])
-    surf2_array = helpers.getMultSurfUniformSpacing(surf2_array, zStep=(np.max(surf2_array[:,2,:,:])+1)/surf2_array.shape[3], xStep=(np.max(surf2_array[:,0,:,:])+1)/surf2_array.shape[2])
+    surf2_array = misc.getMultSurfUniformSpacing(surf2_array, zStep=(np.max(surf2_array[:,2,:,:])+1)/surf2_array.shape[3], xStep=(np.max(surf2_array[:,0,:,:])+1)/surf2_array.shape[2])
 
     # Calculate surface normals first
     surfNormalsMat1 = surf_3d_normals(surf2_array[0,:,:,:])
@@ -173,23 +112,9 @@ def surf_to_shell_interp3(surf2_array,step=[3,3],sigma=2,pixel_size=1,return_sur
     center_surf_array = np.mean(surf2_array,axis=0)
     centerNormalsMat = surf_3d_normals(center_surf_array)
 
-
-    # # Interpolate normal vectors
-    # temp_normals_surf1 = np.moveaxis(np.dstack((surf2_array[0,0,:,:],surfNormalsMat1[0,:,:],surf2_array[0,2,:,:])),2,0)
-    # temp_normals_surf2 = np.moveaxis(np.dstack((surf2_array[0,0,:,:],surfNormalsMat1[1,:,:],surf2_array[0,2,:,:])),2,0)
-    # temp_normals_surf3 = np.moveaxis(np.dstack((surf2_array[0,0,:,:],surfNormalsMat1[2,:,:],surf2_array[0,2,:,:])),2,0)
-    # [temp_normals_surf1,temp_normals_surf2,temp_normals_surf3] = helpers.getMultSurfUniformSpacing(np.array([temp_normals_surf1,temp_normals_surf2,temp_normals_surf3]), zStep=step[1], xStep=step[0])
-    # surfNormalsMat1 = np.array([temp_normals_surf1[1,:,:], temp_normals_surf2[1,:,:], temp_normals_surf3[1,:,:]])
-
-    # temp_normals_surf1 = np.moveaxis(np.dstack((surf2_array[1,0,:,:],surfNormalsMat2[0,:,:],surf2_array[1,2,:,:])),2,0)
-    # temp_normals_surf2 = np.moveaxis(np.dstack((surf2_array[1,0,:,:],surfNormalsMat2[1,:,:],surf2_array[1,2,:,:])),2,0)
-    # temp_normals_surf3 = np.moveaxis(np.dstack((surf2_array[1,0,:,:],surfNormalsMat2[2,:,:],surf2_array[1,2,:,:])),2,0)
-    # [temp_normals_surf1,temp_normals_surf2,temp_normals_surf3] = helpers.getMultSurfUniformSpacing(np.array([temp_normals_surf1,temp_normals_surf2,temp_normals_surf3]), zStep=step[1], xStep=step[0])
-    # surfNormalsMat2 = np.array([temp_normals_surf1[1,:,:], temp_normals_surf2[1,:,:], temp_normals_surf3[1,:,:]])
-
     # Interpolate surfaces and normals
     surf3_normals = np.array([surfNormalsMat1,surfNormalsMat2,centerNormalsMat])
-    [surf3_array, surf3_normals] = helpers.getMultSurfUniformSpacing(np.array([surf2_array[0,:,:,:],surf2_array[1,:,:,:],center_surf_array]), zStep=step[1], xStep=step[0], mult_normals=surf3_normals)
+    [surf3_array, surf3_normals] = misc.getMultSurfUniformSpacing(np.array([surf2_array[0,:,:,:],surf2_array[1,:,:,:],center_surf_array]), zStep=step[1], xStep=step[0], mult_normals=surf3_normals)
     surfNormalsMat1 = surf3_normals[0,:,:,:]
     surfNormalsMat2 = surf3_normals[1,:,:,:]
     centerNormalsMat = surf3_normals[2,:,:,:]
@@ -203,15 +128,6 @@ def surf_to_shell_interp3(surf2_array,step=[3,3],sigma=2,pixel_size=1,return_sur
     # Calculate thickness
     thickness_surf_array = np.apply_along_axis(np.linalg.norm,0,surfIntersect1-surfIntersect2)
 
-    # Prepare thickness temp surf
-    # # Add x,z values to be able to interpolate with existing function
-    # temp_thickness_surf = np.moveaxis(np.dstack((center_surf_array[0,:,:],thickness_surf_array,center_surf_array[2,:,:])),2,0)
-
-    # # Interpolate all surfaces
-    # [surf_array_1,surf_array_2,center_surf_array, temp_thickness_surf] = helpers.getMultSurfUniformSpacing(np.array([surf2_array[0,:,:,:],surf2_array[1,:,:,:],center_surf_array, temp_thickness_surf]), zStep=step[1], xStep=step[0])
-    # surf2_array = np.array([surf_array_1,surf_array_2])
-    # thickness_surf_array = temp_thickness_surf[1,:,:]
-
     # Combine results to shell
     shell_array = np.concatenate((center_surf_array,np.array([thickness_surf_array])), axis=0)
 
@@ -223,61 +139,6 @@ def surf_to_shell_interp3(surf2_array,step=[3,3],sigma=2,pixel_size=1,return_sur
         return [surf2_array, shell_array]
     else:
         return shell_array
-
-
-def surf_to_shell_interp2(surf2_array,step=[3,3],sigma=2,pixel_size=1,return_surf=False):
-    """Performs smoothing and interpolation of the provided surface pair. Next, calculates the shell array 
-    by finding a mean of the surfaces and thickness using surface normals. 
-    Returns the shell surface and the original interpolated surface pair (if requested)\n
-    Params:\n
-    surf2_array - array with 2 surfaces, dim: (2,3,x,z)\n
-    step - 2 element array with step in x and z direction (in pixels)\n
-    sigma - smoothing coefficient (in pixels)\n
-    pixel_size - multiplier for correct data representation\n
-    return_surf - if True returns shell and interpolated surface pair in a list, if False returns only shell
-    """
-    # Smooth surfaces
-    surf2_array[0,1,:,:] = ndimage.gaussian_filter(surf2_array[0,1,:,:], sigma=(sigma, sigma), order=0)
-    surf2_array[1,1,:,:] = ndimage.gaussian_filter(surf2_array[1,1,:,:], sigma=(sigma, sigma), order=0)
-
-    # Initial interpolation to fix uneven mesh
-    # surf2_array = helpers.getMultSurfUniformSpacing(surf2_array, zStep=(np.max(surf2_array[:,2,:,:])+1)/surf2_array.shape[3], xStep=(np.max(surf2_array[:,0,:,:])+1)/surf2_array.shape[2])
-
-    # Calculate central surface and normals first
-    center_surf_array = np.mean(surf2_array,axis=0)
-
-    surfNormalsMat1 = surf_3d_normals(surf2_array[0,:,:,:])
-    surfNormalsMat2 = surf_3d_normals(surf2_array[1,:,:,:])
-    centerNormalsMat = surf_3d_normals(center_surf_array)
-
-    surfIntersect1 = surf_normals_surf_intersect(surf2_array[0,:,:,:],surfNormalsMat1,center_surf_array,centerNormalsMat)
-    surfIntersect2 = surf_normals_surf_intersect(surf2_array[1,:,:,:],surfNormalsMat2,center_surf_array,centerNormalsMat)
-
-    # Calculate thickness
-    thickness_surf_array = np.apply_along_axis(np.linalg.norm,0,surfIntersect1-surfIntersect2)
-
-    # Prepare thickness temp surf
-    # Add x,z values to be able to interpolate with existing function
-    temp_thickness_surf = np.moveaxis(np.dstack((center_surf_array[0,:,:],thickness_surf_array,center_surf_array[2,:,:])),2,0)
-
-    # Interpolate all surfaces
-    [surf_array_1,surf_array_2,center_surf_array, temp_thickness_surf] = helpers.getMultSurfUniformSpacing(np.array([surf2_array[0,:,:,:],surf2_array[1,:,:,:],center_surf_array, temp_thickness_surf]), zStep=step[1], xStep=step[0])
-    surf2_array = np.array([surf_array_1,surf_array_2])
-    thickness_surf_array = temp_thickness_surf[1,:,:]
-
-    # Combine results to shell
-    shell_array = np.concatenate((center_surf_array,np.array([thickness_surf_array])), axis=0)
-
-    # Resize
-    surf2_array = surf2_array*pixel_size
-    shell_array = shell_array*pixel_size
-
-    if return_surf == True:
-        return [surf2_array, shell_array]
-    else:
-        return shell_array
- 
- 
 
 def fem_model_shell(shell_array, part_file_path, save_path, shell_idx=1):
     """Creates finite element model of a part from a shell surface.\n
@@ -411,9 +272,9 @@ def fem_model_shell_list(shell_array_list, part_file_path, master_file_path, sav
 
 if __name__ == "__main__":
     # Open raw segmentation surfaces
-    surf_array_obj = np.load('data/rawFinal/slicewise_z200-780_allSurf_raw.npy', allow_pickle=True)
+    # surf_array_obj = np.load('data/rawFinal/slicewise_z200-780_allSurf_raw.npy', allow_pickle=True)
     # surf_array_obj = np.load('data/H29_slicewise_z200-780_allSurf_raw.npy', allow_pickle=True)
-    # surf_array_obj = np.load('data/rawFinal/H29big_slicewise_z380-620_allSurf_raw.npy', allow_pickle=True)
+    surf_array_obj = np.load('data/rawFinal/H29big_slicewise_z380-620_allSurf_raw.npy', allow_pickle=True)
     # surf_array_obj = np.load('data/H29big_slicewise_z380-620_allSurf_raw.npy', allow_pickle=True)
     # surf_array_obj = np.load('data/rawFinal/NLbig_slicewise_z390-640_allSurf_raw_2.npy', allow_pickle=True)
     # surf_array_obj = np.load('data/NLbig_slicewise_z390-640_rot_-15_allSurf_raw.npy', allow_pickle=True)
@@ -421,30 +282,26 @@ if __name__ == "__main__":
     # surf_array_obj = np.load('data/NL_slicewise_z340-790_rot_-15_allSurf_raw.npy', allow_pickle=True)
     # surf_array_obj = np.load('data/rawFinal/PD_slicewise_z0-950_allSurf_raw.npy', allow_pickle=True)
     # surf_array_obj = np.load('data/rawFinal/PBbig_slicewise_z250-780_allSurf_raw.npy', allow_pickle=True)
-    pixelSize = 0.0078329 #mm 
-    # pixelSize = 0.017551 #mm 
+    # pixelSize = 0.0078329 #mm 
+    pixelSize = 0.017551 #mm 
     # pixelSize = 0.031504 #mm 
     # pixelSize = 0.015172 #mm 
     # pixelSize = 0.015752 #mm 
     # pixelSize = 0.032761 #mm 
     # pixelSize = 1 # For ParaView
 
-    step = [3,3]
+    step = [6,6]
 
     # Retrieve list of surfaces from the object array
     surf_array_list = npy_to_surf_list(surf_array_obj)
 
+    # Calculate shell surfaces
     shell_array_list = []
-    # plt.figure()
     minList = []
     maxList = []
     for i in range(int(len(surf_array_list)/2)):
         surf2_array = np.array([surf_array_list[i*2],surf_array_list[(i*2)+1]])
-        # surf2_array = surf2_array[:,:,:,:238]
-        # [surf2_array, shell_array] = surf_to_shell_interp(surf2_array,step=[3,3],sigma=2,pixel_size=pixelSize,return_surf=True)
-        # [surf2_array, shell_array] = surf_to_shell_interp2(surf2_array,step=[3,3],sigma=4,pixel_size=pixelSize,return_surf=True)
-        [surf2_array, shell_array] = surf_to_shell_interp3(surf2_array,step=step,sigma=1,pixel_size=pixelSize,return_surf=True)
-        # shell_array = surf_to_shell_simple(surf2_array)
+        [surf2_array, shell_array] = surf_to_shell_interp(surf2_array,step=step,sigma=1,pixel_size=pixelSize,return_surf=True)
         shell_array_list.append(shell_array)
         surf_array_list[i*2] = surf2_array[0,:,:,:]
         surf_array_list[(i*2)+1] = surf2_array[1,:,:,:]
@@ -452,22 +309,14 @@ if __name__ == "__main__":
         minList.append(np.min(shell_array[3,:,:]))
         maxList.append(np.max(shell_array[3,:,:]))
 
-        # shell_array[3,:,:] = np.where(shell_array[3,:,:]>0.15, 0.15, shell_array[3,:,:])
-        # shell_array[3,:,:] = np.where(shell_array[3,:,:]<0.06, 0.06, shell_array[3,:,:])
-        # Visualization
-        # plt.subplot(4,2,i+1)
-    #     plt.subplot(2,2,i+1)
-    #     plt.imshow(shell_array[3,:,:].transpose(), cmap='jet')
-    #     plt.colorbar()
-    # plt.show()
-
     # Plotting thickness
     if len(shell_array_list) == 4:
         fig, ax = plt.subplots(2,2,gridspec_kw={'width_ratios': [1, 2.2]})
         posLookup = [0,1,3,2]
     else:
         fig, ax = plt.subplots(4,2)
-        posLookup = [0,1,2,3,7,6,5,4]
+        posLookup = [0,1,2,3,4,5,6,7]
+        # posLookup = [0,2,4,6,7,5,3,1]
     minVal = np.min(np.array(minList))
     maxVal = np.max(np.array(maxList))
     for i in range(len(shell_array_list)):
@@ -475,13 +324,13 @@ if __name__ == "__main__":
         ax.flat[posLookup[i]].set_title(f'Wall  {i+1}',fontweight="bold")
         ax.flat[posLookup[i]].set_xlabel("Width [mm]")
         ax.flat[posLookup[i]].set_ylabel("Height [mm]")
-        # ax.flat[posLookup[i]].set_xticks([0,100,200])
     fig.subplots_adjust(right=0.8)
     cbar_ax = fig.add_axes([0.82, 0.15, 0.05, 0.7])
     cbar = fig.colorbar(im, cax=cbar_ax)
     cbar.set_label('Wall thickness [mm]', rotation=270, labelpad=10)
-    # plt.tight_layout()
     plt.show()
+
+    #Saving the data
     # vwl.save_multSurf2vtk('data/surfaces/H29_slicewise_z200-780_1px.vtk', surf_array_list)
     # vwl.save_multSurf2vtk('data/surfaces/H29_slicewise_z200-780_center_coloured.vtk', shell_array_list)
 

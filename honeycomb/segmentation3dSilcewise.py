@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Created on Fri May 06 17:50:16 2022
+Created on Tue Jan 18 14:57:45 2022
 
-@author: pawel
+@author: Pawel Pieta s202606@student.dtu.dk
 """
 
 
@@ -14,18 +14,18 @@ import copy
 from skimage.morphology import closing
 import os
 
-from honeycombUnfold3d import HoneycombUnfold3d
-import honeycomb3dSurfaceDetector
-import helpers
-import vtk_write_lite as vwl # for saving vtk file
+from honeycomb.unfolding.unfold3d import Unfold3d
+from honeycomb.surface_detection import surfaceDetector2d
+from honeycomb.helpers import misc
+from honeycomb.helpers import vtk_write_lite as vwl # for saving vtk file
 
 import time
 
 
-class stack3dSegmentation:
+class SegmentationPipeline:
     """Performs layered surfaces honeycomb wall edges detection on a whole stack of images using a slicewise approach."""
 
-    def __init__(self, imgStack, wallDetector, helperDetector=None, interpStep=1, normalLinesRange=20, normalLinesNumPoints=40, returnHelperSurfaces=False, a_parabola=0.05, wallCostWeight=0.5, helperCostWeight=0.001):
+    def __init__(self, imgStack, wallDetector=None, helperDetector=None, interpStep=1, normalLinesRange=20, normalLinesNumPoints=40, returnHelperSurfaces=False, a_parabola=0.05, wallCostWeight=0.5, helperCostWeight=0.001):
         """Class initialization.\n
         Params:\n
         imgStack - 3D honecomb image stack\n
@@ -53,10 +53,10 @@ class stack3dSegmentation:
         self.helperCostWeight = helperCostWeight
 
         self.vis_img = np.copy(imgStack)
-        self.vis_img = helpers.rescaleImage(self.vis_img, 1, 255)
+        self.vis_img = misc.rescaleImage(self.vis_img, 1, 255)
 
         ## Calculate image gaussian model 
-        self.means, self.variances = helpers.imgGaussianModel(imgStack)
+        self.means, self.variances = misc.imgGaussianModel(imgStack)
 
         # Prepare parabola vector
         self.parVec = np.arange(-normalLinesNumPoints/2,normalLinesNumPoints/2,1)
@@ -157,16 +157,24 @@ class stack3dSegmentation:
             unfolded_stack = hc.unfolded_img
 
             # Calculate cost
-            helperCost_stack = (1 - helpers.sigmoidProbFunction(unfolded_stack,self.means,self.variances, weight=self.helperCostWeight, visualize=visualize))*255
+            helperCost_stack = (1 - misc.sigmoidProbFunction(unfolded_stack,self.means,self.variances, weight=self.helperCostWeight, visualize=visualize))*255
             helperCost_stack = scp.uniform_filter(helperCost_stack,size=3)
             # Add the parabola
             helperCost_stack = np.moveaxis((np.moveaxis(helperCost_stack,1,-1)+self.parVec),-1,1)
-
-            helperSurf = self.helperDetector.detect(helperCost_stack, visualize=visualize, builderType='default')
             
-            ## Fold detected lines back to original image shape
-            folded_helper = np.round(hc.fold_3d_surfaces_back(helperSurf)[0]).astype('int')
-            helperStack[folded_helper[2,:],folded_helper[1,:],folded_helper[0,:]]=i+1
+            for j in range(unfolded_stack.shape[0]):
+                print(f"Helper layer {i+1}, Zstack {j+1}")
+                unfolded_img = unfolded_stack[j,:,:]
+                helperCost = helperCost_stack[j,:,:]
+
+                unfolded_img = misc.rescaleImage(unfolded_img, 1, 255)
+                #calculate helper line
+                helperSurf = self.helperDetector.detect(helperCost, visualize=visualize, builderType='parallel_2')
+
+                ## Fold detected lines back to original image shape
+                folded_helper = np.round(hc.fold_2d_surfaces_back(helperSurf, zIdx=j)[0]).astype('int')
+                #Apply detection to a helper stack
+                helperStack[j,folded_helper[1,:],folded_helper[0,:]]=i+1
             print(f"Finished layer {i+1} for the helper detection")
 
         # Make a copy of the hc objects with different image
@@ -183,6 +191,10 @@ class stack3dSegmentation:
         Params:\n
         visualize - If True - shows the results of detection
         """
+
+        if self.wallDetector is None:
+            print("Wall detector was not defined, segmentation can't be performed.")
+            return
 
         for i in range(len(self.hcList)):
             print(f"Final detection, layer {i+1} started")
@@ -228,43 +240,42 @@ class stack3dSegmentation:
                             unfolded_helperStackFixed[idxList] = 1
 
             # Calculate cost
-            honeycombCost_stack = (1 - helpers.sigmoidProbFunction(unfolded_stack,self.means,self.variances, weight=self.wallCostWeight, visualize=visualize))*255
-            backgroundCost_stack = helpers.sigmoidProbFunction(unfolded_stack,self.means,self.variances, weight=self.helperCostWeight, visualize=visualize)*255
+            honeycombCost_stack = (1 - misc.sigmoidProbFunction(unfolded_stack,self.means,self.variances, weight=self.wallCostWeight, visualize=visualize))*255
+            backgroundCost_stack = misc.sigmoidProbFunction(unfolded_stack,self.means,self.variances, weight=self.helperCostWeight, visualize=visualize)*255
             
             backgroundCost_stack = np.moveaxis((np.moveaxis(backgroundCost_stack,1,-1)+self.parVec),-1,1)
 
-            # zstackList = []
-            # for j in range(unfolded_stack.shape[0]):        
-                # unfolded_img = unfolded_stack[j,:,:]
+            zstackList = []
+            timeCount = 0
+            for j in range(unfolded_stack.shape[0]):        
+                unfolded_img = unfolded_stack[j,:,:]
                 
-                # honeycombCost = honeycombCost_stack[j,:,:]
-                # backgroundCost = backgroundCost_stack[j,:,:]
+                honeycombCost = honeycombCost_stack[j,:,:]
+                backgroundCost = backgroundCost_stack[j,:,:]
 
-            if self.helperDetector is not None:
-                # unfolded_helper = unfolded_helperStackFixed[j,:,:]
-                backgroundCost_stack[unfolded_helperStackFixed>0] = 300
+                if self.helperDetector is not None:
+                    unfolded_helper = unfolded_helperStackFixed[j,:,:]
+                    backgroundCost[unfolded_helper>0] = 300
 
-            if visualize == True and j == 0:
-                plt.figure()
-                plt.imshow(backgroundCost_stack[0,:,:])
-                plt.show()
+                if visualize == True and j == 0:
+                    plt.figure()
+                    plt.imshow(backgroundCost)
+                    plt.show()
 
-            unfolded_stack = helpers.rescaleImage(unfolded_stack, 1, 255)
+                unfolded_img = misc.rescaleImage(unfolded_img, 1, 255)
 
-            # unfolded_stack2 = unfolded_stack[:4,:,:]
-            # honeycombCost_stack2 = honeycombCost_stack[:4,:,:]
-            # backgroundCost_stack2 = backgroundCost_stack[:4,:,:]
-
-            ### Layered surfaces detection
-            t0 = time.time()
-            segmentation_surfaces = self.wallDetector.detect(unfolded_stack, honeycombCost_stack, backgroundCost_stack,
-                visualize=visualize, return_helper_surfaces=self.returnHelperSurfaces, builderType='parallel_6')
-            t1 = time.time()
-            ## Fold detected lines back to original image shape
-            folded_surfaces = hc.fold_3d_surfaces_back(segmentation_surfaces, representation='matrix')
-            self.layersList.append(folded_surfaces)
-            
-            print(f"Finished Layer {i+1} for the final detection, segmentation time: {t1-t0}")
+                ### Layered surfaces detection
+                t0 = time.time()
+                segmentation_surfaces = self.wallDetector.detect(unfolded_img, honeycombCost, backgroundCost,
+                    visualize=visualize, return_helper_surfaces=self.returnHelperSurfaces,builderType='parallel_2')
+                t1 = time.time()
+                timeCount = timeCount + (t1-t0)
+                ## Fold detected lines back to original image shape
+                folded_surfaces = hc.fold_2d_surfaces_back(segmentation_surfaces, zIdx=j)
+                zstackList.append(folded_surfaces)
+                print(f"Layer {i+1}, Zstack {j+1}")
+            self.layersList.append(zstackList)
+            print(f"Finished Layer {i+1} for the final detection, segmentation time: {timeCount}")
 
 
     def segmentVolume(self, layerNum, savePointsPath='', loadPointsPath='', visualize=True):
@@ -276,7 +287,7 @@ class stack3dSegmentation:
         """
         
         # Preparing separate unfolding objects for each wall
-        self.hcList = [HoneycombUnfold3d(self.imgStack, self.vis_img, visualize=visualize) for i in range(layerNum)]
+        self.hcList = [Unfold3d(self.imgStack, self.vis_img, visualize=visualize) for i in range(layerNum)]
 
         #Defining the corner points by loading or manual pointing
         if loadPointsPath == '':
@@ -326,7 +337,7 @@ if __name__ == "__main__":
     # I = np.array(Inew)
 
     ####### Params #######
-    visualizeUnfolding = False # if True - visualizes the unfolding process steps
+    visualizeUnfolding = True # if True - visualizes the unfolding process steps
     #### Segmentation params
     layerNum = 1
     # savePointsPath="data/cornerPoints/NLbig_z390-640_rot_-15.txt"
@@ -359,38 +370,38 @@ if __name__ == "__main__":
     helperCostWeight = 0.001 # same as above, applies both to helper detection and to helper surfaces in the main detection
 
     # Main wall detector instance
-    wallDetector = honeycomb3dSurfaceDetector.WallEdgeDetector(edgeSmoothness=edgeSmoothness, 
-                                                            helperSmoothness=helperSmoothness, 
-                                                            helperWeight=helperWeight, 
-                                                            wallThickness=wallThickness,
-                                                            darkHelperDist=darkHelperDist, 
-                                                            darkWhiteHelperDist=darkWhiteHelperDist)
+    wallDetector = surfaceDetector2d.WallEdgeDetector(edgeSmoothness=edgeSmoothness, 
+                                                        helperSmoothness=helperSmoothness, 
+                                                        helperWeight=helperWeight, 
+                                                        wallThickness=wallThickness,
+                                                        darkHelperDist=darkHelperDist, 
+                                                        darkWhiteHelperDist=darkWhiteHelperDist)
     # Helper wall center detector instance
-    helperDetector = honeycomb3dSurfaceDetector.WallCenterDetector(smoothness=helperDetectionSmoothness)
+    helperDetector = surfaceDetector2d.WallCenterDetector(smoothness=helperDetectionSmoothness)
     # Slicewise segmentation instance
-    honeycombSegmentation = stack3dSegmentation(imgStack=I, 
-                                                wallDetector=wallDetector, 
-                                                helperDetector=None, 
-                                                interpStep=interpStep, 
-                                                normalLinesRange=normalLinesRange, 
-                                                normalLinesNumPoints=normalLinesNumPoints, 
-                                                returnHelperSurfaces=returnHelperSurfaces, 
-                                                a_parabola=a_parabola,
-                                                wallCostWeight=wallCostWeight,
-                                                helperCostWeight=helperCostWeight)
+    pipeline = SegmentationPipeline(imgStack=I, 
+                                    wallDetector=wallDetector, 
+                                    helperDetector=None, 
+                                    interpStep=interpStep, 
+                                    normalLinesRange=normalLinesRange, 
+                                    normalLinesNumPoints=normalLinesNumPoints, 
+                                    returnHelperSurfaces=returnHelperSurfaces, 
+                                    a_parabola=a_parabola,
+                                    wallCostWeight=wallCostWeight,
+                                    helperCostWeight=helperCostWeight)
     # Run the segmentation
-    layersList = honeycombSegmentation.segmentVolume(layerNum=layerNum, 
-                                                    savePointsPath=savePointsPath, 
-                                                    loadPointsPath=loadPointsPath, 
-                                                    visualize=visualizeUnfolding)
+    layersList = pipeline.segmentVolume(layerNum=layerNum, 
+                                        savePointsPath=savePointsPath, 
+                                        loadPointsPath=loadPointsPath, 
+                                        visualize=visualizeUnfolding)
     
     # Plot the results
     plt.figure()
     plt.imshow(I[1,:,:], cmap='gray')
     for i in range(len(layersList)):
-        folded_surfaces = layersList[i]
+        folded_surfaces = layersList[i][1]
         for j in range(len(folded_surfaces)):
-            folded_surface = folded_surfaces[j][:2,1,:]
+            folded_surface = folded_surfaces[j]
             if j < 2:
                 plt.plot(folded_surface[0,:],folded_surface[1,:], 'r')
             else:
@@ -402,7 +413,8 @@ if __name__ == "__main__":
 
     # plt.imshow(segmImg[15,:,:].transpose())
     # # plt.show()
-
+    
+    # Save the results
     # surf = helpers.layersToSurface(layersList)
     # surf_array = np.array(surf)
     # np.save("data/H29_slicewise_z200-780_allSurf_raw.npy", surf_array)

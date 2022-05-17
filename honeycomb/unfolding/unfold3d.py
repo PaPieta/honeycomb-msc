@@ -2,7 +2,7 @@
 """
 Created on Tue Jan 18 11:20:37 2022
 
-@author: pawel
+@author: Pawel Pieta s202606@student.dtu.dk
 """
 
 
@@ -11,16 +11,17 @@ import matplotlib.pyplot as plt
 import scipy.ndimage as scp
 import scipy
 import cv2 as cv
+
+
 from mpl_toolkits import mplot3d
 from mayavi import mlab
 from scipy.spatial import Delaunay
 
-
-import helpers
-
+from honeycomb.helpers import misc
 
 
-class HoneycombUnfold3d:
+
+class Unfold3d:
     """Set of methods for unfolding and folding a honeycomb scan
     for purposes of slicewise layered surfaces detection of a 3D stack.\n
     Pipeline of the segmentation process:\n
@@ -130,7 +131,7 @@ class HoneycombUnfold3d:
         #For visualization
         zUnique = np.arange(0,self.img_shape[0],1) # !!!!!!!Warning changed Z step to be always 1
         # TODO: Think about possibly moving this function here
-        self.lines_interp = helpers.getLinesUniformInterpSpacing(self.lines, zStep=1, xStep=step)
+        self.lines_interp = misc.getLinesUniformInterpSpacing(self.lines, zStep=1, xStep=step)
 
         # # save for calculating normals
         self.interp_x_len = self.lines_interp.shape[1]
