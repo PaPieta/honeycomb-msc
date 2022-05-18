@@ -5,7 +5,7 @@ The project holds a set of functions and classes that allow for segmentation of 
 
 The library was developed as a part of Master Thesis project at Technical University of Denmark (DTU), under supervision of [Vedrana Andersen Dahl](https://orbit.dtu.dk/en/persons/vedrana-andersen-dahl) and [Lars Pilgaard Mikkelsen](https://orbit.dtu.dk/en/persons/lars-pilgaard-mikkelsen). Details of the project can be found inside the thesis: "3D surface fitting for segmenting and modelling folded honeycombs".
 
-The segmentation is powered by [slgbuilder library](https://github.com/Skielex/slgbuilder) and its extension [shrdr](https://github.com/Skielex/shrdr). 
+The segmentation is powered by [slgbuilder](https://github.com/Skielex/slgbuilder)  library and its extension [shrdr](https://github.com/Skielex/shrdr). 
 
 Other external libraries:
 * [NumPy](https://numpy.org/)

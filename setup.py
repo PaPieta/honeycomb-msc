@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 from pathlib import Path
 this_directory = Path(__file__).parent
@@ -8,12 +8,12 @@ setup(
     name="honeycomb",
     version="0.1.0",
     author="Pawel Pieta",
-    author_email="niejep@dtu.dk",
+    author_email="s202606@student.dtu.dk",
     description="A Python package for segmentation and model generation from CT scans of folded honeycombs.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/PaPieta/honeycomb-msc",
-    packages=["honeycomb"],
+    packages=find_packages(),
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Environment :: Console",

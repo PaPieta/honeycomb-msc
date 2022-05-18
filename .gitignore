@@ -131,3 +131,5 @@ dmypy.json
 # Manually added
 data/
 workspace/
+.idea
+.vscode
