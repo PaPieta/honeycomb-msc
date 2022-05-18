@@ -82,7 +82,7 @@ class SegmentationPipeline:
             t1 = time.time()
             print(f"Normals calculated, time: {t1-t0}")
             t0 = time.time()
-            hc.get_unfold_points_from_normals3(interp_points=self.normalLinesNumPoints)
+            hc.get_unfold_points_from_normals(interp_points=self.normalLinesNumPoints)
             t1 = time.time()
             print(f"Normals interpolated, time: {t1-t0}")
             hc.unfold_image()
@@ -338,12 +338,12 @@ if __name__ == "__main__":
 
     plt.show()
 
-    # segmImg = helpers.layersToMatrix(layersList, I.shape)
+    # segmImg = misc.layersToMatrix(layersList, I.shape)
 
     # plt.imshow(segmImg[15,:,:].transpose())
     # # plt.show()
 
-    # surf = helpers.layersToSurface(layersList)
+    # surf = misc.layersToSurface(layersList)
     # surf_array = np.array(surf)
     # np.save("data/H29_slicewise_z200-780_allSurf_raw.npy", surf_array)
 

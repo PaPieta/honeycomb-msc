@@ -219,7 +219,7 @@ class SegmentationPipeline:
         """
         
         # Preparing separate unfolding objects for each wall
-        self.hcList = [Unfold2d(self.imgSlice, self.vis_img, visualize=visualizeUnfolding) for i in range(wallNum)]
+        self.hcList = [Unfold2d(self.imgSlice, self.vis_img, visualize=visualize) for i in range(wallNum)]
 
         #Defining the corner points by loading or manual pointing
         if loadPointsPath == '':

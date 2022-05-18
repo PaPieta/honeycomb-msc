@@ -296,10 +296,10 @@ def generate_shell_model(surf_array_list,pixelSize=1,meshSize=[6,6],smoothingSig
 
     if plotThickness:
         if len(shell_array_list) == 4:
-            fig, ax = plt.subplots(2,2,gridspec_kw={'width_ratios': [1, 2.2]})
+            fig, ax = plt.subplots(2,2,gridspec_kw={'width_ratios': [1, 2.2]}, figsize=(18,6))
             posLookup = [0,1,3,2]
         else:
-            fig, ax = plt.subplots(4,2)
+            fig, ax = plt.subplots(4,2, figsize=(18,6))
             posLookup = [0,1,2,3,4,5,6,7]
             # posLookup = [0,2,4,6,7,5,3,1]
         minVal = np.min(np.array(minList))
