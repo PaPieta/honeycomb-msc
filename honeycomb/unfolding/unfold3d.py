@@ -13,9 +13,9 @@ import scipy
 import cv2 as cv
 
 
-from mpl_toolkits import mplot3d
-from mayavi import mlab
-from scipy.spatial import Delaunay
+# from mpl_toolkits import mplot3d
+# from mayavi import mlab
+# from scipy.spatial import Delaunay
 
 from honeycomb.helpers import misc
 
