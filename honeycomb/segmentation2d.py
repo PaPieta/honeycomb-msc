@@ -66,52 +66,6 @@ class SegmentationPipeline:
         self.hcHelpList = []
         self.layersList = []
 
-    def saveHcPoints(self, savePath):
-        """Used for saving the points marked by the user into a txt file\n
-        Params:\n
-        savePath - Full file save path
-        """
-
-        saveDir = os.path.dirname(savePath)
-        if not os.path.exists(saveDir):
-            os.makedirs(saveDir)
-
-        with open(savePath, 'w') as f:
-            for i in range(len(self.hcList)):
-                hc = self.hcList[i]
-                line = hc.lines
-                f.write(f"HC {i} {line.shape[1]}\n")
-                for k in range(line.shape[1]):
-                    f.write(f"{line[0,k]} {line[1,k]}\n")
-
-    def loadHcPoints(self, loadPath):
-        """Used for loading from txt file ponts previously marked by the user.\n
-        Params:\n
-        savePath - Full file load path
-        """
-
-        with open(loadPath, "r") as f:
-            contents = f.readlines()
-
-        hcIdx = -1
-        for i in range(len(contents)):
-            currString = contents[i]
-            elemList = currString.split()
-            if "HC" in currString:
-                prevHcIdx = hcIdx
-                hcIdx =  int(elemList[1])
-                if prevHcIdx != -1:
-                    self.hcList[prevHcIdx].lines = line
-
-                numPoints =  int(elemList[2])
-                pointsCounter = 0
-                line = np.zeros((2,numPoints))
-            elif currString != '\n':
-                line[:,pointsCounter] = np.array([float(elemList[0]), float(elemList[1])])
-                pointsCounter += 1
-        
-        self.hcList[hcIdx].lines = line
-
     def unfoldSlice(self):
         """Loops through the honeycomb wall objects and performs full unfolding process.
         """

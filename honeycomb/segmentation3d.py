@@ -17,6 +17,7 @@ from honeycomb.unfolding.unfold3d import Unfold3d
 from honeycomb.surface_detection import surfaceDetector3d
 from honeycomb.helpers import misc
 from honeycomb.helpers import vtk_write_lite as vwl # for saving vtk file
+from honeycomb import cornerPointsAgent
 
 import time
 
@@ -64,59 +65,6 @@ class SegmentationPipeline:
         self.hcList = []
         self.hcHelpList = []
         self.layersList = []
-        
-    def saveHcPoints(self, savePath):
-        """Used for saving the points marked by the user into a txt file\n
-        Params:\n
-        savePath - Full file save path
-        """
-
-        saveDir = os.path.dirname(savePath)
-        if not os.path.exists(saveDir):
-            os.makedirs(saveDir)
-
-        with open(savePath, 'w') as f:
-            for i in range(len(self.hcList)):
-                hc = self.hcList[i]
-                for j in range(len(hc.lines)):
-                    line = hc.lines[j]
-                    f.write(f"HC {i} {j} {line.shape[1]}\n")
-                    for k in range(line.shape[1]):
-                        f.write(f"{line[0,k]} {line[1,k]} {line[2,k]}\n")
-
-    def loadHcPoints(self, loadPath):
-        """Used for loading from txt file ponts previously marked by the user.\n
-        Params:\n
-        savePath - Full file load path
-        """
-
-        with open(loadPath, "r") as f:
-            contents = f.readlines()
-
-        hcIdx = -1
-        for i in range(len(contents)):
-            currString = contents[i]
-            elemList = currString.split()
-            if "HC" in currString:
-                prevHcIdx = hcIdx
-                hcIdx =  int(elemList[1])
-                if prevHcIdx != hcIdx:
-                    if prevHcIdx != -1:
-                        lineList.append(line)
-                        self.hcList[prevHcIdx].lines = lineList
-                    lineList = []
-                else:
-                    lineList.append(line)
-                lineIdx =  int(elemList[2])
-                numPoints =  int(elemList[3])
-                pointsCounter = 0
-                line = np.zeros((3,numPoints))
-            elif currString != '\n':
-                line[:,pointsCounter] = np.array([float(elemList[0]), float(elemList[1]), float(elemList[2])])
-                pointsCounter += 1
-        
-        lineList.append(line)
-        self.hcList[hcIdx].lines = lineList
 
     def unfoldStack(self):
         """Loops through the honeycomb wall objects and performs full unfolding process.
@@ -275,11 +223,11 @@ class SegmentationPipeline:
             for hc in self.hcList:
                 self.vis_img = hc.draw_corners()
         else:
-            self.hcList = self.loadHcPoints(loadPointsPath, self.hcList)
+            self.hcList = cornerPointsAgent.load3dHcPoints(loadPointsPath, self.hcList)
 
         # Saving the points
         if savePointsPath != '':
-            self.saveHcPoints(savePointsPath, self.hcList)
+            cornerPointsAgent.save3dHcPoints(savePointsPath, self.hcList)
 
         # Unfolding the wall images
         self.unfoldStack()
