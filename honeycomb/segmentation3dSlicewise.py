@@ -285,7 +285,7 @@ if __name__ == "__main__":
     # I = np.array(Inew)
 
     ####### Params #######
-    visualizeUnfolding = True # if True - visualizes the unfolding process steps
+    visualize = True # if True - visualizes the unfolding process steps
     #### Segmentation params
     wallNum = 1
     # savePointsPath="data/cornerPoints/NLbig_z390-640_rot_-15.txt"
@@ -302,7 +302,7 @@ if __name__ == "__main__":
     normalLinesNumPoints = 60 # Number of interpolation points along a normal line
     #### Detection params
     # In segmentation
-    returnHelperSurfaces = False # if True, returns also dark helper surfaces from surface detection process
+    returnHelperSurfaces = True # if True, returns also dark helper surfaces from surface detection process
     a_parabola = 0.05 # a parameter of y=ax^2+b equation, used to modify the helper detection cost function
     # Helper
     helperDetectionSmoothness = 1 # how much in y direction the line can move with each step in the x direction (only int values)
@@ -341,7 +341,7 @@ if __name__ == "__main__":
     layersList = pipeline.segmentVolume(wallNum=wallNum, 
                                         savePointsPath=savePointsPath, 
                                         loadPointsPath=loadPointsPath, 
-                                        visualize=visualizeUnfolding)
+                                        visualize=visualize)
     
     # Plot the results
     plt.figure()

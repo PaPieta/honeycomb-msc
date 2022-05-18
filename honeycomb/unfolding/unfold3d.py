@@ -96,13 +96,14 @@ class Unfold3d:
                 self.vis_img[self.slice_idx[i],:,:] = cv.line(self.vis_img[self.slice_idx[i],:,:], start_point, end_point, color, thickness)
         # Plot the results of the corner drawing
         if self.visualize == True:
-            plt.figure()
+            plt.figure(figsize=(18,6))
             for i in range(3):
                 line = self.lines[i]
                 plt.subplot(1,3,i+1)
                 plt.imshow(self.img[self.slice_idx[i],:,:], cmap='gray')
                 plt.plot(line[0,:],line[1,:], '-')
-
+                plt.title(f"Z={self.slice_idx[i]}")
+            plt.suptitle("Marked points")
             plt.show()
             # pointVec = np.empty((3,0))
             # for i in range(3):
@@ -139,7 +140,7 @@ class Unfold3d:
 
 
         if self.visualize == True:
-            plt.figure()
+            plt.figure(figsize=(18,6))
             for i in range(3):
                 # Find interpolated z layer closest to the original image layers
                 zlayer = np.argmin(np.abs(zUnique-self.slice_idx[i]))
@@ -149,7 +150,9 @@ class Unfold3d:
                 plt.subplot(1,3,i+1)
                 plt.imshow(self.img[self.slice_idx[i],:,:], cmap='gray')
                 plt.plot(interp_points[0,:],interp_points[1,:], '*',markersize=4)
-
+                plt.title(f"Z={zlayer}")
+            plt.suptitle("Interpolated points")
+            plt.show()
     
     def smooth_interp_corners(self):
         """Applies smoothing on the interpolation points along X and Y axis 
@@ -164,7 +167,7 @@ class Unfold3d:
 
         if self.visualize == True:
             zUnique = np.unique(self.lines_interp[2,:])
-            plt.figure()
+            plt.figure(figsize=(18,6))
             for i in range(3):
                 # Find interpolated z layer closest to the original image layers
                 zlayer = np.argmin(np.abs(zUnique-self.slice_idx[i]))
@@ -174,6 +177,8 @@ class Unfold3d:
                 plt.subplot(1,3,i+1)
                 plt.imshow(self.img[self.slice_idx[i],:,:], cmap='gray')
                 plt.plot(interp_points[0,:],interp_points[1,:], '*',markersize=1)
+                plt.title(f"Z={self.slice_idx[i]}")
+            plt.suptitle("Smoothed points")
             plt.show()
             # fig = mlab.figure(1, bgcolor=(1, 1, 1),fgcolor=(0.,0.,0.))
             # mlab.points3d(self.lines_interp[0,:,:],self.lines_interp[1,:,:],self.lines_interp[2,:,:],color=(1,0.2,0.2),scale_factor=3)
@@ -215,7 +220,7 @@ class Unfold3d:
 
         if self.visualize == True:
             zUnique = np.unique(self.lines_interp[2,:])
-            plt.figure()
+            plt.figure(figsize=(18,6))
             for i in range(3):
                 # Find interpolated z layer closest to the original image layers
                 zlayer = np.argmin(np.abs(zUnique-self.slice_idx[i]))
@@ -226,6 +231,8 @@ class Unfold3d:
                 plt.imshow(self.img[self.slice_idx[i],:,:], cmap='gray')
                 for j in range(temp_normals.shape[2]):
                     plt.plot(temp_normals[:,0,j],temp_normals[:,1,j], '-',color='k')
+                    plt.title(f"Z={self.slice_idx[i]}")
+            plt.suptitle("Calculated normal lines")
             plt.show()
 
 
@@ -363,7 +370,7 @@ class Unfold3d:
 
         if self.visualize == True:
             zUnique = np.unique(self.lines_interp[2,:])
-            plt.figure()
+            plt.figure(figsize=(18,6))
             for i in range(3):
                 # Find interpolated z layer closest to the original image layers
                 zlayer = np.argmin(np.abs(zUnique-self.slice_idx[i]))

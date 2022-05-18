@@ -109,7 +109,7 @@ class SegmentationPipeline:
             # Add the parabola
             helperCost_stack = np.moveaxis((np.moveaxis(helperCost_stack,1,-1)+self.parVec),-1,1)
 
-            helperSurf = self.helperDetector.detect(helperCost_stack, visualize=visualize, builderType='default')
+            helperSurf = self.helperDetector.detect(helperCost_stack, visualize=visualize, builderType='parallel_2')
             
             ## Fold detected lines back to original image shape
             folded_helper = np.round(hc.fold_3d_surfaces_back(helperSurf)[0]).astype('int')
@@ -198,7 +198,7 @@ class SegmentationPipeline:
             ### Layered surfaces detection
             t0 = time.time()
             segmentation_surfaces = self.wallDetector.detect(unfolded_stack, honeycombCost_stack, backgroundCost_stack,
-                visualize=visualize, return_helper_surfaces=self.returnHelperSurfaces, builderType='parallel_6')
+                visualize=visualize, return_helper_surfaces=self.returnHelperSurfaces, builderType='parallel_2')
             t1 = time.time()
             ## Fold detected lines back to original image shape
             folded_surfaces = hc.fold_3d_surfaces_back(segmentation_surfaces, representation='matrix')
@@ -266,7 +266,7 @@ if __name__ == "__main__":
     # I = np.array(Inew)
 
     ####### Params #######
-    visualizeUnfolding = False # if True - visualizes the unfolding process steps
+    visualize = False # if True - visualizes the unfolding process steps
     #### Segmentation params
     wallNum = 1
     # savePointsPath="data/cornerPoints/NLbig_z390-640_rot_-15.txt"
@@ -322,7 +322,7 @@ if __name__ == "__main__":
     layersList = pipeline.segmentVolume(wallNum=wallNum, 
                                         savePointsPath=savePointsPath, 
                                         loadPointsPath=loadPointsPath, 
-                                        visualize=visualizeUnfolding)
+                                        visualize=visualize)
     
     # Plot the results
     plt.figure()

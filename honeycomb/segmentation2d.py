@@ -255,7 +255,7 @@ if __name__ == "__main__":
     I_2d = scp.rotate(I_2d,-15)
 
     ####### Params #######
-    visualizeUnfolding = False # if True - visualizes the unfolding process steps
+    visualize = False # if True - visualizes the unfolding process steps
     #### Segmentation params
     wallNum = 2
     # savePointsPath = "data/cornerPoints/H29slicewise_z200.txt"
@@ -308,7 +308,7 @@ if __name__ == "__main__":
     layersList = pipeline.segmentVolume(wallNum=wallNum, 
                                         savePointsPath=savePointsPath, 
                                         loadPointsPath=loadPointsPath, 
-                                        visualize=visualizeUnfolding)
+                                        visualize=visualize)
 
     plt.figure()
     plt.imshow(I_2d, cmap='gray')
