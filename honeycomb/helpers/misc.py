@@ -569,4 +569,3 @@ def layersToSurface(layersList):
 
     return surfaceList
 
-

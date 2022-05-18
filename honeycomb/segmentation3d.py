@@ -24,7 +24,7 @@ import time
 class SegmentationPipeline:
     """Performs layered surfaces honeycomb wall edges detection on a whole stack of images using a slicewise approach."""
 
-    def __init__(self, imgStack, wallDetector, helperDetector=None, interpStep=1, normalLinesRange=20, normalLinesNumPoints=40, returnHelperSurfaces=False, a_parabola=0.05, wallCostWeight=0.5, helperCostWeight=0.001):
+    def __init__(self, imgStack, wallDetector=None, helperDetector=None, interpStep=1, normalLinesRange=20, normalLinesNumPoints=40, returnHelperSurfaces=False, a_parabola=0.05, wallCostWeight=0.5, helperCostWeight=0.001):
         """Class initialization.\n
         Params:\n
         imgStack - 3D honecomb image stack\n
@@ -66,7 +66,7 @@ class SegmentationPipeline:
         self.layersList = []
         
     def saveHcPoints(self, savePath):
-        """Private function. Used for saving the points marked by the user into a txt file\n
+        """Used for saving the points marked by the user into a txt file\n
         Params:\n
         savePath - Full file save path
         """
@@ -85,7 +85,7 @@ class SegmentationPipeline:
                         f.write(f"{line[0,k]} {line[1,k]} {line[2,k]}\n")
 
     def loadHcPoints(self, loadPath):
-        """Private function. Used for loading from txt file ponts previously marked by the user.\n
+        """Used for loading from txt file ponts previously marked by the user.\n
         Params:\n
         savePath - Full file load path
         """
@@ -119,7 +119,7 @@ class SegmentationPipeline:
         self.hcList[hcIdx].lines = lineList
 
     def unfoldStack(self):
-        """Private function. Loops through the honeycomb wall objects and performs full unfolding process.
+        """Loops through the honeycomb wall objects and performs full unfolding process.
         """
 
         for i in range(len(self.hcList)):
@@ -142,7 +142,7 @@ class SegmentationPipeline:
             self.hcList[i] = hc
 
     def detectHelperWallCenter(self, visualize=True):
-        """Private function. Detects the approximation of the center of the honeycomb wall. 
+        """Detects the approximation of the center of the honeycomb wall. 
         Used for modification of the cost fuction at the final segmenatation step\n
         Params:\n
         visualize - If True - shows the results of detection
@@ -178,10 +178,14 @@ class SegmentationPipeline:
             print(f"Helper image {i} unfolded")
 
     def detectWallEdges(self, visualize=True):
-        """Private function. Performs the final detection of the honeycomb wall edges for all marked walls.
+        """Performs the final detection of the honeycomb wall edges for all marked walls.
         Params:\n
         visualize - If True - shows the results of detection
         """
+
+        if self.wallDetector is None:
+            print("Wall detector was not defined, segmentation can't be performed.")
+            return
 
         for i in range(len(self.hcList)):
             print(f"Final detection, layer {i+1} started")
@@ -255,27 +259,27 @@ class SegmentationPipeline:
             print(f"Finished Layer {i+1} for the final detection, segmentation time: {t1-t0}")
 
 
-    def segmentVolume(self, layerNum, savePointsPath='', loadPointsPath='', visualize=True):
+    def segmentVolume(self, wallNum, savePointsPath='', loadPointsPath='', visualize=True):
         """ Performs all the steps needed for detection of the wall edges in the honeycomb scan.\n
         Parameters:\n
-        layerNum - number of layers to detect\n
+        wallNum - number of honeycomb walls to detect\n
         savePointsPath - if not '', saves manually marked points as a txt file
         loadPointsPath - if not '', loads the points from given path instead of initializing manual marking.
         """
         
         # Preparing separate unfolding objects for each wall
-        self.hcList = [Unfold3d(self.imgStack, self.vis_img, visualize=visualize) for i in range(layerNum)]
+        self.hcList = [Unfold3d(self.imgStack, self.vis_img, visualize=visualize) for i in range(wallNum)]
 
         #Defining the corner points by loading or manual pointing
         if loadPointsPath == '':
             for hc in self.hcList:
                 self.vis_img = hc.draw_corners()
         else:
-            self.loadHcPoints(loadPointsPath)
+            self.hcList = self.loadHcPoints(loadPointsPath, self.hcList)
 
         # Saving the points
         if savePointsPath != '':
-            self.saveHcPoints(savePointsPath)
+            self.saveHcPoints(savePointsPath, self.hcList)
 
         # Unfolding the wall images
         self.unfoldStack()
@@ -316,7 +320,7 @@ if __name__ == "__main__":
     ####### Params #######
     visualizeUnfolding = False # if True - visualizes the unfolding process steps
     #### Segmentation params
-    layerNum = 1
+    wallNum = 1
     # savePointsPath="data/cornerPoints/NLbig_z390-640_rot_-15.txt"
     # savePointsPath="data/cornerPoints/H29big_slicewise_z380-620.txt"
     # loadPointsPath="data/cornerPoints/NLbig_z390-640_rot_-15.txt"
@@ -367,7 +371,7 @@ if __name__ == "__main__":
                                     wallCostWeight=wallCostWeight,
                                     helperCostWeight=helperCostWeight)
     # Run the segmentation
-    layersList = pipeline.segmentVolume(layerNum=layerNum, 
+    layersList = pipeline.segmentVolume(wallNum=wallNum, 
                                         savePointsPath=savePointsPath, 
                                         loadPointsPath=loadPointsPath, 
                                         visualize=visualizeUnfolding)

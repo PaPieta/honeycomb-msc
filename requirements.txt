@@ -1,0 +1,9 @@
+matplotlib
+numpy
+scikit_image
+scikit_learn
+scipy
+setuptools
+slgbuilder
+tifffile
+opencv-python

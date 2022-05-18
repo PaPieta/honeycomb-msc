@@ -27,5 +27,5 @@ setup(
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
         "Topic :: Scientific/Engineering :: Mathematics",
     ],
-    install_requires=["numpy", "scipy", "scikit-learn", "slgbuilder", "shrdr", "scikit-image", "scikit-learn", "matplotlib", "opencv-python"],
+    install_requires=["numpy", "scipy", "scikit-learn", "slgbuilder", "shrdr", "scikit-image", "matplotlib", "opencv-python"],
 )

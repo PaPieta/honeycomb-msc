@@ -136,7 +136,7 @@ def surf_to_shell_interp(surf2_array,step=[3,3],sigma=2,pixel_size=1,return_surf
     shell_array = shell_array*pixel_size
 
     if return_surf == True:
-        return [surf2_array, shell_array]
+        return [shell_array, surf2_array]
     else:
         return shell_array
 
@@ -230,12 +230,12 @@ def fem_model_shell(shell_array, part_file_path, save_path, shell_idx=1):
     return fileName
 
 
-def fem_model_shell_list(shell_array_list, part_file_path, master_file_path, save_path):
+def save_fem_shell_model(shell_array_list, part_file_path, master_file_path, save_path):
     """Creates finite element model from list of shell structures. Generates a master file and calls for generation of the part files.\n
     Params:\n
-    shell_array_list - list of shell arrray models
-    part_file_path - path to a template part file
-    master_file_path - path to a template master file
+    shell_array_list - list of shell arrray models\n
+    part_file_path - path to a template part file\n
+    master_file_path - path to a template master file\n
     save_path - path to a new folder where the model files will be placed
     """
 
@@ -270,6 +270,56 @@ def fem_model_shell_list(shell_array_list, part_file_path, master_file_path, sav
         f.write(contents)
 
 
+def generate_shell_model(surf_array_list,pixelSize=1,meshSize=[6,6],smoothingSigma=1,returnSurfaces=True, plotThickness=True):
+    """Generates a shell representation of the honeycomb structure from its segmented wall edges.
+    Params:\n
+    surf_array - list of surface arrays representing the 3D segmentation result of the honeycomb wall edges\n
+    pixel_size - used to rescale the model size to fit the original representation\n
+    meshSize - [X,Z] axis size of the generated mesh
+    smoothingSigma - sigma parameter in the gaussian smoothing of the surface\n
+    returnSurfaces - if True, returns also original surfaces (reinterpolated and smoothed)\n
+    plotThickness - if True, plots the calculated wall thickness data
+    """
+    # Calculate shell surfaces
+    shell_array_list = []
+    minList = []
+    maxList = []
+    for i in range(int(len(surf_array_list)/2)):
+        surf2_array = np.array([surf_array_list[i*2],surf_array_list[(i*2)+1]])
+        [shell_array, surf2_array] = surf_to_shell_interp(surf2_array,step=meshSize,sigma=smoothingSigma,pixel_size=pixelSize,return_surf=True)
+        shell_array_list.append(shell_array)
+        surf_array_list[i*2] = surf2_array[0,:,:,:]
+        surf_array_list[(i*2)+1] = surf2_array[1,:,:,:]
+
+        minList.append(np.min(shell_array[3,:,:]))
+        maxList.append(np.max(shell_array[3,:,:]))
+
+    if plotThickness:
+        if len(shell_array_list) == 4:
+            fig, ax = plt.subplots(2,2,gridspec_kw={'width_ratios': [1, 2.2]})
+            posLookup = [0,1,3,2]
+        else:
+            fig, ax = plt.subplots(4,2)
+            posLookup = [0,1,2,3,4,5,6,7]
+            # posLookup = [0,2,4,6,7,5,3,1]
+        minVal = np.min(np.array(minList))
+        maxVal = np.max(np.array(maxList))
+        for i in range(len(shell_array_list)):
+            im = ax.flat[posLookup[i]].imshow(shell_array_list[i][3,:,:].transpose(), vmin=minVal,vmax=maxVal, cmap='jet',extent=[0,meshSize[0]*pixelSize*shell_array_list[i][0,:,:].shape[0],0,meshSize[1]*pixelSize*shell_array_list[i][0,:,:].shape[1]])
+            ax.flat[posLookup[i]].set_title(f'Wall  {i+1}',fontweight="bold")
+            ax.flat[posLookup[i]].set_xlabel("Width [mm]")
+            ax.flat[posLookup[i]].set_ylabel("Height [mm]")
+        fig.subplots_adjust(right=0.8)
+        cbar_ax = fig.add_axes([0.82, 0.15, 0.05, 0.7])
+        cbar = fig.colorbar(im, cax=cbar_ax)
+        cbar.set_label('Wall thickness [mm]', rotation=270, labelpad=10)
+        plt.show()
+
+    if returnSurfaces:
+        return [shell_array_list, surf_array_list]
+    else:
+        return shell_array_list
+
 if __name__ == "__main__":
     # Open raw segmentation surfaces
     # surf_array_obj = np.load('data/rawFinal/slicewise_z200-780_allSurf_raw.npy', allow_pickle=True)
@@ -290,45 +340,18 @@ if __name__ == "__main__":
     # pixelSize = 0.032761 #mm 
     # pixelSize = 1 # For ParaView
 
-    step = [6,6]
+    meshSize = [6,6]
 
     # Retrieve list of surfaces from the object array
     surf_array_list = npy_to_surf_list(surf_array_obj)
 
-    # Calculate shell surfaces
-    shell_array_list = []
-    minList = []
-    maxList = []
-    for i in range(int(len(surf_array_list)/2)):
-        surf2_array = np.array([surf_array_list[i*2],surf_array_list[(i*2)+1]])
-        [surf2_array, shell_array] = surf_to_shell_interp(surf2_array,step=step,sigma=1,pixel_size=pixelSize,return_surf=True)
-        shell_array_list.append(shell_array)
-        surf_array_list[i*2] = surf2_array[0,:,:,:]
-        surf_array_list[(i*2)+1] = surf2_array[1,:,:,:]
-
-        minList.append(np.min(shell_array[3,:,:]))
-        maxList.append(np.max(shell_array[3,:,:]))
-
-    # Plotting thickness
-    if len(shell_array_list) == 4:
-        fig, ax = plt.subplots(2,2,gridspec_kw={'width_ratios': [1, 2.2]})
-        posLookup = [0,1,3,2]
-    else:
-        fig, ax = plt.subplots(4,2)
-        posLookup = [0,1,2,3,4,5,6,7]
-        # posLookup = [0,2,4,6,7,5,3,1]
-    minVal = np.min(np.array(minList))
-    maxVal = np.max(np.array(maxList))
-    for i in range(len(shell_array_list)):
-        im = ax.flat[posLookup[i]].imshow(shell_array_list[i][3,:,:].transpose(), vmin=minVal,vmax=maxVal, cmap='jet',extent=[0,step[0]*pixelSize*shell_array_list[i][0,:,:].shape[0],0,step[1]*pixelSize*shell_array_list[i][0,:,:].shape[1]])
-        ax.flat[posLookup[i]].set_title(f'Wall  {i+1}',fontweight="bold")
-        ax.flat[posLookup[i]].set_xlabel("Width [mm]")
-        ax.flat[posLookup[i]].set_ylabel("Height [mm]")
-    fig.subplots_adjust(right=0.8)
-    cbar_ax = fig.add_axes([0.82, 0.15, 0.05, 0.7])
-    cbar = fig.colorbar(im, cax=cbar_ax)
-    cbar.set_label('Wall thickness [mm]', rotation=270, labelpad=10)
-    plt.show()
+    # Generate shell model
+    [shell_array_list, surf_array_list] = generate_shell_model(surf_array_list,
+                                                                pixelSize=pixelSize,
+                                                                meshSize=meshSize,
+                                                                smoothingSigma=1,
+                                                                returnSurfaces=True,
+                                                                plotThickness=True)
 
     #Saving the data
     # vwl.save_multSurf2vtk('data/surfaces/H29_slicewise_z200-780_1px.vtk', surf_array_list)
@@ -338,4 +361,4 @@ if __name__ == "__main__":
     # masterFilePath = "data/abaqusShells/dummyMaster.inp"
     # savePath = "data/abaqusShells/H29_slicewise_z200-780_4x_meanThickness/"
 
-    # fem_model_shell_list(shell_array_list, partFilePath, masterFilePath, savePath)
+    # save_fem_shell_model(shell_array_list, partFilePath, masterFilePath, savePath)
