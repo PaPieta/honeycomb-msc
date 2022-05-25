@@ -296,10 +296,10 @@ def generate_shell_model(surf_array_list,pixelSize=1,meshSize=[6,6],smoothingSig
 
     if plotThickness:
         if len(shell_array_list) == 4:
-            fig, ax = plt.subplots(2,2,gridspec_kw={'width_ratios': [1, 2.2]}, figsize=(18,6))
+            fig, ax = plt.subplots(2,2,gridspec_kw={'width_ratios': [1, 2.2]}, figsize=(16,8))
             posLookup = [0,1,3,2]
         else:
-            fig, ax = plt.subplots(4,2, figsize=(18,6))
+            fig, ax = plt.subplots(4,2, figsize=(16,6))
             posLookup = [0,1,2,3,4,5,6,7]
             # posLookup = [0,2,4,6,7,5,3,1]
         minVal = np.min(np.array(minList))
@@ -357,8 +357,8 @@ if __name__ == "__main__":
     # vwl.save_multSurf2vtk('data/surfaces/H29_slicewise_z200-780_1px.vtk', surf_array_list)
     # vwl.save_multSurf2vtk('data/surfaces/H29_slicewise_z200-780_center_coloured.vtk', shell_array_list)
 
-    # partFilePath = "data/abaqusShells/dummyPart.inp"
-    # masterFilePath = "data/abaqusShells/dummyMaster.inp"
+    # partFilePath = "data/abaqusShells/templatePart.inp"
+    # masterFilePath = "data/abaqusShells/templateMaster.inp"
     # savePath = "data/abaqusShells/H29_slicewise_z200-780_4x_meanThickness/"
 
     # save_fem_shell_model(shell_array_list, partFilePath, masterFilePath, savePath)

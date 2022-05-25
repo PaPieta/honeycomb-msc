@@ -72,21 +72,21 @@ class SegmentationPipeline:
 
         for i in range(len(self.hcList)):
             hc = self.hcList[i]
-            print(f"Unfolding of layer {i+1} started")
+            misc.print_statusline(f"Unfolding of wall {i+1} started")
             hc.interpolate_points(step=self.interpStep)
-            print("Points interpolated")
+            misc.print_statusline(f"Wall {i+1}, points interpolated")
             hc.smooth_interp_corners()
-            print("Points smoothed")
+            misc.print_statusline(f"Wall {i+1}, points smoothed")
             t0 = time.time()
             hc.calculate_normals(normals_range=self.normalLinesRange)
             t1 = time.time()
-            print(f"Normals calculated, time: {t1-t0}")
+            misc.print_statusline(f"Wall {i+1}, normals calculated")
             t0 = time.time()
             hc.get_unfold_points_from_normals(interp_points=self.normalLinesNumPoints)
             t1 = time.time()
-            print(f"Normals interpolated, time: {t1-t0}")
+            misc.print_statusline(f"Wall {i+1}, normals interpolated")
             hc.unfold_image()
-            print("Image unfolded")
+            misc.print_statusline(f"Wall {i+1}, image unfolded")
             self.hcList[i] = hc
 
     def detectHelperWallCenter(self, visualize=True):
@@ -109,7 +109,7 @@ class SegmentationPipeline:
             # Add the parabola
             helperCost = np.moveaxis((np.moveaxis(helperCost,0,-1)+self.parVec),-1,0)
             
-            print(f"Helper layer {i+1}")
+            misc.print_statusline(f"Helper surface, wall {i+1}")
 
             #calculate helper line
             helperSurf = self.helperDetector.detect(helperCost, visualize=visualize)
@@ -119,7 +119,7 @@ class SegmentationPipeline:
             #Apply detection to a helper stack
             helperSlice[folded_helper[1,:],folded_helper[0,:]]=i+1
 
-            print(f"Finished layer {i+1} for the helper detection")
+            misc.print_statusline(f"Finished wall {i+1} for the helper detection")
 
         # Make a copy of the hc objects with different image
         self.hcHelpList = copy.deepcopy(self.hcList)
@@ -128,7 +128,7 @@ class SegmentationPipeline:
             hcHelp.img = helperSlice
             hcHelp.unfold_image(method='nearest')
             self.hcHelpList[i] = hcHelp
-            print(f"Helper image {i} unfolded")
+            misc.print_statusline(f"Helper image {i} unfolded")
 
     def detectWallEdges(self, visualize=True):
         """Performs the final detection of the honeycomb wall edges for all marked walls.
@@ -137,11 +137,11 @@ class SegmentationPipeline:
         """
 
         if self.wallDetector is None:
-            print("Wall detector was not defined, segmentation can't be performed.")
+            misc.print_statusline("Wall detector was not defined, segmentation can't be performed.")
             return
 
         for i in range(len(self.hcList)):
-            print(f"Final detection, layer {i+1} started")
+            misc.print_statusline(f"Final detection, wall {i+1} started")
             hc = self.hcList[i]
             unfolded_img = hc.unfolded_img
 
@@ -208,7 +208,7 @@ class SegmentationPipeline:
             ## Fold detected lines back to original image shape
             folded_surfaces = hc.fold_surfaces_back(segmentation_surfaces)
             self.layersList.append(folded_surfaces)
-            print(f"Finished Layer {i+1} for the final detection")
+            misc.print_statusline(f"Finished wall {i+1} for the final detection")
 
     def segmentVolume(self, wallNum, savePointsPath='', loadPointsPath='', visualize=True):
         """ Performs all the steps needed for detection of the wall edges in a slice of the honeycomb scan.\n
@@ -240,6 +240,8 @@ class SegmentationPipeline:
 
         # Final detection
         self.detectWallEdges(visualize=visualize)
+
+        misc.print_statusline(f"2D honeycomb wall segmentation finished.")
        
         return self.layersList
 
