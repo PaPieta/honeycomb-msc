@@ -44,4 +44,4 @@ To install shrdr, go to https://github.com/Skielex/shrdr and follow the installa
 
 ## Examples
 
-Example use of the library is presented in a form of notebooks on Code Ocean platform (To be updated)
+Example use of the library is presented in a form of a notebook on Code Ocean platform: https://codeocean.com/capsule/888ef0bc-754c-4941-afcf-9ea65c2ade74/
