@@ -8,6 +8,7 @@ Created on Wed May 18 11:01:13 2022
 import numpy as np 
 import os
 import skimage.io 
+import scipy.ndimage as scp
 
 from honeycomb.unfolding.unfold3d import Unfold3d
 from honeycomb.unfolding.unfold2d import Unfold2d
@@ -121,39 +122,41 @@ def load3dHcPoints(loadPath, hcList):
 if __name__ == "__main__":
 
     # Load a chosen dataset
-    I = skimage.io.imread('data/29-2016_29-2016-60kV-zoom-center_recon.tif')
+    I = skimage.io.imread('data/NL07C_NL07C-60kV-zoom-center_recon.tif')
 
 
 
     ### 2D version ###
 
     # Choose slice and save name
-    # I_slice = I[300,:,:]
-    # savePointsPath = "data/cornerPoints/H29_z300_test.txt"
-    # # Choose number of walls to mark
-    # wallNum = 4
-    # # Preparing separate unfolding objects for each wall
-    # visImg = np.copy(I_slice)
-    # hcList = [Unfold2d(I_slice, visImg, visualize=False) for i in range(wallNum)]
-    # # Draw corners
-    # for hc in hcList:
-    #     visImg = hc.draw_corners()
-    # # Save the corners
-    # save2dHcPoints(savePointsPath, hcList)
+    I_slice = I[240,:,:]
+    # Rotate if needed
+    I_slice = scp.rotate(I_slice,-15)
+    savePointsPath = "data/cornerPoints/NL_z240_1wall_highNumPoints.txt"
+    # Choose number of walls to mark
+    wallNum = 1
+    # Preparing separate unfolding objects for each wall
+    visImg = np.copy(I_slice)
+    hcList = [Unfold2d(I_slice, visImg, visualize=False) for i in range(wallNum)]
+    # Draw corners
+    for hc in hcList:
+        visImg = hc.draw_corners()
+    # Save the corners
+    save2dHcPoints(savePointsPath, hcList)
 
 
 
     ### 3D version ###
 
-    I_cut= I[200:400,:,:]
-    savePointsPath = "data/cornerPoints/H29_z200-400_test.txt"
-    # Choose number of walls to mark
-    wallNum = 4
-    # Preparing separate unfolding objects for each wall
-    visImg = np.copy(I_cut)
-    hcList = [Unfold3d(I_cut, visImg, visualize=False) for i in range(wallNum)]
-    # Draw corners
-    for hc in hcList:
-        visImg = hc.draw_corners()
-    # Save the corners
-    save3dHcPoints(savePointsPath, hcList)
+    # I_cut= I[200:400,:,:]
+    # savePointsPath = "data/cornerPoints/H29_z200-400_test.txt"
+    # # Choose number of walls to mark
+    # wallNum = 4
+    # # Preparing separate unfolding objects for each wall
+    # visImg = np.copy(I_cut)
+    # hcList = [Unfold3d(I_cut, visImg, visualize=False) for i in range(wallNum)]
+    # # Draw corners
+    # for hc in hcList:
+    #     visImg = hc.draw_corners()
+    # # Save the corners
+    # save3dHcPoints(savePointsPath, hcList)

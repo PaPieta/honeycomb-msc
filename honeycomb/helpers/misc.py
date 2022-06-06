@@ -10,11 +10,8 @@ import matplotlib.pyplot as plt
 import scipy.stats as stats
 from sklearn.mixture import GaussianMixture
 from scipy.interpolate import UnivariateSpline
-from scipy.interpolate import RegularGridInterpolator
 import scipy.interpolate
 import sys
-
-import os
 
 
 def imgGaussianModel(img, step_3d=89):
@@ -142,73 +139,31 @@ def surfaceNormal2(poly):
 
     return N
 
-def getFuncUniformSpacing(points, startX, endX, step=1, s=None, visualize=False):
-    """Defines a uniform (in relation to data curve) x axis spacing 
-    based on a 1st order spline fitted to the provided points.\n
-    Params:\n
-    points - 2d array with positions of the points\n
-    startX - x axis value to start the interpolation from\n
-    endX - x axis value to end the interpolation at.\n
-    step - interpolation step\n
-    s - Positive smoothing factor used to choose the number of knots. 
-        Number of knots will be increased until the smoothing condition is satisfied.
-        If 0, spline will interpolate through all data points\n
-    visualize - if true, will plot resilt of the spline fitting and interpolation.
-    """
-    # Sort the points
-    points = points[:,np.argsort(points[0,:])]
-    # Make sure there are no points with same x val
-    for i in range(points.shape[1]-1,-1,-1):
-        if points[0,i] == points[0,i-1]:
-            points[:,i-1] = np.mean((points[:,i],points[:,i-1]),axis=0)
-            points = np.delete(points, i, axis=1)
-    # # Sort again to be sure 
-    # points = points[:,np.argsort(points[0,:])]
-    # Calculate spline and get example values
-    spl = UnivariateSpline(points[0,:], points[1,:], k=1, s=s)
-    # x = np.arange(np.min(points[0,:]), np.max(points[0,:]), step)
-    x = np.arange(startX, endX, step)
-    y = spl(x)
-    # https://stackoverflow.com/questions/19117660/how-to-generate-equispaced-interpolating-values
-    #  Calculate all all distances between the points 
-    # and generate the coordinates on the curve by cumulative summing.
-    xd = np.diff(x)
-    yd = np.diff(y)
-    dist = np.sqrt(xd**2+yd**2)
-    u = np.cumsum(dist)
-    u = np.hstack([[0],u])
-    # Interpolate the x-coordinates independently with respect to the new coordinates.
-    t = np.arange(0,u.max(),step)
-    xn = np.interp(t, u, x)
-
-    if visualize == True:
-        yn = np.interp(t, u, y)
-
-        plt.figure()
-        plt.plot(points[0,:],points[1,:], 'r*')
-        plt.plot(x,y,'r-')
-        plt.plot(xn, yn, 'g*')
-        plt.legend(['original points', 'fitted spline', 'calculated equally spaced points'])
-        plt.show()
-
-    return xn
-
-def getSurfUniformSpacing(surf_array, zPoints=200, xPoints=200):
+def getShellUniformSpacing(shell_array, zStep=3, xStep=3):
     """Defines a uniform (in relation to surface curve) x,z axis spacing 
     based on a 1st order spline fitted to the provided points.\n
     Params:\n
-    surf_array - 3d array with a surface (3,xNum,zNum)\n
+    shell_array - 3d array with a surface and thickness (4,xNum,zNum)\n
     step - interpolation step\n
     """
     # https://stackoverflow.com/questions/19117660/how-to-generate-equispaced-interpolating-values
     
+    # Cumulative distance calculation
+    xd = np.diff(shell_array[0,:,:],axis=0)
+    yd = np.diff(shell_array[1,:,:],axis=0)
+    distMat = np.sqrt(xd**2+yd**2)
+    u = np.cumsum(distMat, axis=0)
+    # Find average distance
+    avgDist = np.mean(np.sum(distMat, axis=0))
+    # Define corrrect number of t points with regards to min dist
+    tPoints = int(np.round(avgDist/xStep))
 
     # X Axis
-    xMin = np.max(np.min(surf_array[0,:,:],axis=0))
-    xMax = np.min(np.max(surf_array[0,:,:],axis=0))
-    surf_array_X = np.zeros((3,xPoints,surf_array.shape[2]))
-    for i in range(surf_array.shape[2]):
-        points = surf_array[:,:,i]
+    xMin = np.max(np.min(shell_array[0,:,:],axis=0))
+    xMax = np.min(np.max(shell_array[0,:,:],axis=0))
+    surf_array_X = np.zeros((4,tPoints,shell_array.shape[2]))
+    for i in range(shell_array.shape[2]):
+        points = shell_array[:,:,i]
         #Remove repetitions
         points = np.unique(points,axis=1)
         # Sort the points by X axis
@@ -216,9 +171,8 @@ def getSurfUniformSpacing(surf_array, zPoints=200, xPoints=200):
         # Calculate spline for the final step and equally starting example values
         ySpl = UnivariateSpline(points[0,:], points[1,:], k=1, s=0)
         zSpl = UnivariateSpline(points[0,:], points[2,:], k=1, s=0)
-        # ySpl = scipy.interpolate.interp1d(points[0,:], points[1,:])
-        # zSpl = scipy.interpolate.interp1d(points[0,:], points[2,:])
-        x = np.linspace(xMin, xMax, xPoints)
+        thicSpline = UnivariateSpline(points[0,:], points[3,:], k=1, s=0)
+        x = np.linspace(xMin, xMax, tPoints)
         y = ySpl(x)
         # Calculate all all distances between the points 
         # and generate the coordinates on the curve by cumulative summing.
@@ -228,18 +182,31 @@ def getSurfUniformSpacing(surf_array, zPoints=200, xPoints=200):
         u = np.cumsum(dist)
         u = np.hstack([[0],u])
         # Interpolate the x-coordinates independently with respect to the new coordinates.
-        t = np.linspace(0,u.max(),xPoints)
+        t = np.linspace(0,u.max(),tPoints)
         xn = np.interp(t, u, x)
         yn = np.interp(t, u, y)
         zn = zSpl(xn)
+        thicn = thicSpline(xn)
         surf_array_X[0,:,i] = xn
         surf_array_X[1,:,i] = yn
         surf_array_X[2,:,i] = zn
+        surf_array_X[3,:,i] = thicn
 
     # Z Axis
+
+    # Cumulative distance calculation
+    zd = np.diff(shell_array[2,:,:],axis=1)
+    yd = np.diff(shell_array[1,:,:],axis=1)
+    distMat = np.sqrt(zd**2+yd**2)
+    u = np.cumsum(distMat, axis=1)
+    # Find average distance
+    avgDist = np.mean(np.sum(distMat, axis=1))
+    # Define corrrect number of t points with regards to min dist
+    tPoints = int(np.round(avgDist/zStep))
+
     zMin = np.max(np.min(surf_array_X[2,:,:],axis=1))
     zMax = np.min(np.max(surf_array_X[2,:,:],axis=1))
-    surf_array_Z = np.zeros((3,surf_array_X.shape[1],zPoints))
+    surf_array_Z = np.zeros((4,surf_array_X.shape[1],tPoints))
     for i in range(surf_array_X.shape[1]):
         points = surf_array_X[:,i,:]
         #Remove repetitions
@@ -247,11 +214,10 @@ def getSurfUniformSpacing(surf_array, zPoints=200, xPoints=200):
         # Sort the points by Z axis
         points = points[:,np.argsort(points[2,:])]
         # Calculate spline for the final step and equally starting example values
-        # ySpl = UnivariateSpline(points[2,:], points[1,:], k=1, s=0)
-        # xSpl = UnivariateSpline(points[2,:], points[0,:], k=1, s=0)
         ySpl = scipy.interpolate.interp1d(points[2,:], points[1,:])
         xSpl = scipy.interpolate.interp1d(points[2,:], points[0,:])
-        z = np.linspace(zMin, zMax, zPoints)
+        thicSpline = UnivariateSpline(points[2,:], points[3,:], k=1, s=0)
+        z = np.linspace(zMin, zMax, tPoints)
         y = ySpl(z)
         # Calculate all all distances between the points 
         # and generate the coordinates on the curve by cumulative summing.
@@ -261,16 +227,17 @@ def getSurfUniformSpacing(surf_array, zPoints=200, xPoints=200):
         u = np.cumsum(dist)
         u = np.hstack([[0],u])
         # Interpolate the x-coordinates independently with respect to the new coordinates.
-        t = np.linspace(0,u.max(),zPoints)
+        t = np.linspace(0,u.max(),tPoints)
         zn = np.interp(t, u, z)
         xn = xSpl(zn)
         yn = np.interp(t, u, y)
+        thicn = thicSpline(zn)
         surf_array_Z[0,i,:] = xn
         surf_array_Z[1,i,:] = yn
         surf_array_Z[2,i,:] = zn
+        surf_array_Z[3,i,:] = thicn
 
     return surf_array_Z
-
 
 def getMultSurfUniformSpacing(mult_surf_array, zStep=3, xStep=3, mult_normals=None):
     """Defines a uniform (in relation to surface curve) x,z axis spacing 

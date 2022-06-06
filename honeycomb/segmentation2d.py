@@ -252,7 +252,9 @@ if __name__ == "__main__":
     I = skimage.io.imread('data/NL07C_NL07C-60kV-LFoV-center-+-1-ring_recon.tif')
 
     # I_2d = I[200,:,:]
-    I_2d = I[390,:,:]
+    # I_2d = I[390,:,:]
+    # I_2d = I[425,:,:]
+    I_2d = I[640,:,:]
     # Rotate if needed
     I_2d = scp.rotate(I_2d,-15)
 
@@ -262,9 +264,9 @@ if __name__ == "__main__":
     wallNum = 2
     # savePointsPath = "data/cornerPoints/H29slicewise_z200.txt"
     savePointsPath = ""
-    # loadPointsPath= ""
+    loadPointsPath= "data/cornerPoints/NLbig_z640_2walls_resultBendTouch2.txt"
     # loadPointsPath= "data/cornerPoints/H29oneSlice_thesisViz_z200.txt"
-    loadPointsPath= "data/cornerPoints/NLbigOneSlice_2wallSegments_z390.txt"
+    # loadPointsPath= "data/cornerPoints/NLbigOneSlice_2wallSegments_z390.txt"
     #### Unfolding params
     interpStep = 1 # Distance between the interpolated points
     normalLinesRange = 15 # Range (half of the length) of lines normal to interpolation points
@@ -285,6 +287,8 @@ if __name__ == "__main__":
     # Cost function
     wallCostWeight = 0.5 # defines the position of 0.5 probability value in the wall cost function, if set to 0.5 it is in the middle between the means of the distributions
     helperCostWeight = 0.001 # same as above, applies both to helper detection and to helper surfaces in the main detection
+
+
 
     # Main wall detector instance
     wallDetector = surfaceDetector2d.WallEdgeDetector(edgeSmoothness=edgeSmoothness, 
@@ -319,7 +323,10 @@ if __name__ == "__main__":
         for j in range(len(folded_surfaces)):
             folded_surface = folded_surfaces[j]
             if j < 2:
+                # if j%2 == 0:
                 plt.plot(folded_surface[0,:],folded_surface[1,:], 'r')
+                # else:
+                #     plt.plot(folded_surface[0,:],folded_surface[1,:], 'y')
             else:
                 plt.plot(folded_surface[0,:],folded_surface[1,:], 'b')
 

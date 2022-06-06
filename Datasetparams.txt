@@ -105,7 +105,7 @@ wallCostWeight = 0.5 # defines the position of 0.5 probability value in the wall
 helperCostWeight = 0.001 # same as above, applies both to helper detection and to helper surfaces in the main detection
 
 ############
-'data/PD27A-60kV-zoom-center_recon.tif
+'data/PD27A-60kV-zoom-center_recon.tif'
 
 I = I[:950,:,:]
 loadPointsPath = "data/cornerPoints/PD_z0-950_rot_-15.txt"

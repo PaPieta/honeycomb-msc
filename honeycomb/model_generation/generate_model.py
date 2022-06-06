@@ -5,6 +5,7 @@ Created on Wed Feb 09 15:12:29 2022
 @author: Pawel Pieta s202606@student.dtu.dk
 """
 
+from statistics import median
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -130,6 +131,57 @@ def surf_to_shell_interp(surf2_array,step=[3,3],sigma=2,pixel_size=1,return_surf
 
     # Combine results to shell
     shell_array = np.concatenate((center_surf_array,np.array([thickness_surf_array])), axis=0)
+
+    # Resize
+    surf2_array = surf2_array*pixel_size
+    shell_array = shell_array*pixel_size
+
+    if return_surf == True:
+        return [shell_array, surf2_array]
+    else:
+        return shell_array
+
+def surf_to_shell_interp2(surf2_array,step=[3,3],sigma=2,pixel_size=1,return_surf=False, medianSmooth=False):
+    """Performs smoothing and initial interpolation of the provided surface pair. Next, calculates the central surface 
+    by finding a mean of the surfaces and vectors normal to all thre surfaces. Finally, resamples the normals and surfaces
+    to a desired step and finds the thickness using the normals.
+    Returns the shell surface and the original interpolated surface pair (if requested)\n
+    Params:\n
+    surf2_array - array with 2 surfaces, dim: (2,3,x,z)\n
+    step - 2 element array with step in x and z direction (in pixels)\n
+    sigma - smoothing coefficient (in pixels)\n
+    pixel_size - multiplier for correct data representation\n
+    return_surf - if True returns shell and interpolated surface pair in a list, if False returns only shell
+    """
+    # Smooth surfaces
+    surf2_array[0,:2,:,:] = ndimage.gaussian_filter(surf2_array[0,:2,:,:], sigma=(0, sigma, sigma), order=0)
+    surf2_array[1,:2,:,:] = ndimage.gaussian_filter(surf2_array[1,:2,:,:], sigma=(0, sigma, sigma), order=0)
+    # Calculate central surface
+    center_surf_array = np.mean(surf2_array,axis=0)
+
+    # Calculate normals
+    surfNormalsMat1 = surf_3d_normals(surf2_array[0,:,:,:])
+    surfNormalsMat2 = surf_3d_normals(surf2_array[1,:,:,:])
+    centerNormalsMat = surf_3d_normals(center_surf_array)
+
+    # Calculate intersection
+    surfIntersect1 = surf_normals_surf_intersect(surf2_array[0,:,:,:],surfNormalsMat1,center_surf_array,centerNormalsMat)
+    surfIntersect2 = surf_normals_surf_intersect(surf2_array[1,:,:,:],surfNormalsMat2,center_surf_array,centerNormalsMat)
+
+    # Calculate thickness
+    thickness_surf_array = np.apply_along_axis(np.linalg.norm,0,surfIntersect1-surfIntersect2)
+
+    if medianSmooth == True:
+        thickness_surf_array = ndimage.median_filter(thickness_surf_array, size=3)
+
+    # Combine results to shell
+    shell_array = np.concatenate((center_surf_array,np.array([thickness_surf_array])), axis=0)
+
+    # Inerpolate surfaces and shells
+    shell_array = misc.getShellUniformSpacing(shell_array,zStep=step[1], xStep=step[0])
+    [surf_array_1,surf_array_2] = misc.getMultSurfUniformSpacing(np.array([surf2_array[0,:,:,:],surf2_array[1,:,:,:]]), zStep=step[1], xStep=step[0])
+    
+    surf2_array = np.array([surf_array_1, surf_array_2])
 
     # Resize
     surf2_array = surf2_array*pixel_size
@@ -270,13 +322,17 @@ def save_fem_shell_model(shell_array_list, part_file_path, master_file_path, sav
         f.write(contents)
 
 
-def generate_shell_model(surf_array_list,pixelSize=1,meshSize=[6,6],smoothingSigma=1,returnSurfaces=True, plotThickness=True):
+def generate_shell_model(surf_array_list,pixelSize=1,meshSize=[6,6],smoothingSigma=1,method=1,returnSurfaces=True, plotThickness=True):
     """Generates a shell representation of the honeycomb structure from its segmented wall edges.
     Params:\n
     surf_array - list of surface arrays representing the 3D segmentation result of the honeycomb wall edges\n
     pixel_size - used to rescale the model size to fit the original representation\n
     meshSize - [X,Z] axis size of the generated mesh
     smoothingSigma - sigma parameter in the gaussian smoothing of the surface\n
+    method - 1 or 2, shell surface extraction method:\n
+        1 - surf_to_shell_interp,\n
+        2 - surf_to_shell_interp2,\n
+        3 - surf_to_shell_interp2 with median smoothing of thickness,\n
     returnSurfaces - if True, returns also original surfaces (reinterpolated and smoothed)\n
     plotThickness - if True, plots the calculated wall thickness data
     """
@@ -286,7 +342,14 @@ def generate_shell_model(surf_array_list,pixelSize=1,meshSize=[6,6],smoothingSig
     maxList = []
     for i in range(int(len(surf_array_list)/2)):
         surf2_array = np.array([surf_array_list[i*2],surf_array_list[(i*2)+1]])
-        [shell_array, surf2_array] = surf_to_shell_interp(surf2_array,step=meshSize,sigma=smoothingSigma,pixel_size=pixelSize,return_surf=True)
+        if method == 1:
+            [shell_array, surf2_array] = surf_to_shell_interp(surf2_array,step=meshSize,sigma=smoothingSigma,pixel_size=pixelSize,return_surf=True)
+        elif method == 2:
+            [shell_array, surf2_array] = surf_to_shell_interp2(surf2_array,step=meshSize,sigma=smoothingSigma,pixel_size=pixelSize,return_surf=True, medianSmooth=False)
+        elif method == 3:
+            [shell_array, surf2_array] = surf_to_shell_interp2(surf2_array,step=meshSize,sigma=smoothingSigma,pixel_size=pixelSize,return_surf=True, medianSmooth=True)
+        
+
         shell_array_list.append(shell_array)
         surf_array_list[i*2] = surf2_array[0,:,:,:]
         surf_array_list[(i*2)+1] = surf2_array[1,:,:,:]
@@ -296,23 +359,24 @@ def generate_shell_model(surf_array_list,pixelSize=1,meshSize=[6,6],smoothingSig
 
     if plotThickness:
         if len(shell_array_list) == 4:
-            fig, ax = plt.subplots(2,2,gridspec_kw={'width_ratios': [1, 2.2]}, figsize=(16,8))
+            fig, ax = plt.subplots(2,2,gridspec_kw={'width_ratios': [1, 2.2]}, figsize=(14,10))
             posLookup = [0,1,3,2]
         else:
-            fig, ax = plt.subplots(4,2, figsize=(16,6))
+            fig, ax = plt.subplots(4,2, figsize=(16,11))
             posLookup = [0,1,2,3,4,5,6,7]
             # posLookup = [0,2,4,6,7,5,3,1]
         minVal = np.min(np.array(minList))
         maxVal = np.max(np.array(maxList))
         for i in range(len(shell_array_list)):
             im = ax.flat[posLookup[i]].imshow(shell_array_list[i][3,:,:].transpose(), vmin=minVal,vmax=maxVal, cmap='jet',extent=[0,meshSize[0]*pixelSize*shell_array_list[i][0,:,:].shape[0],0,meshSize[1]*pixelSize*shell_array_list[i][0,:,:].shape[1]])
-            ax.flat[posLookup[i]].set_title(f'Wall  {i+1}',fontweight="bold")
-            ax.flat[posLookup[i]].set_xlabel("Width [mm]")
-            ax.flat[posLookup[i]].set_ylabel("Height [mm]")
+            ax.flat[posLookup[i]].set_title(f'Wall  {i+1}',fontweight="bold", fontsize=16)
+            ax.flat[posLookup[i]].set_xlabel("Width [mm]", fontsize=14)
+            ax.flat[posLookup[i]].set_ylabel("Height [mm]", fontsize=14)
         fig.subplots_adjust(right=0.8)
         cbar_ax = fig.add_axes([0.82, 0.15, 0.05, 0.7])
         cbar = fig.colorbar(im, cax=cbar_ax)
-        cbar.set_label('Wall thickness [mm]', rotation=270, labelpad=10)
+        cbar.ax.tick_params(labelsize=12) 
+        cbar.set_label('Wall thickness [μm]', rotation=270, labelpad=12, fontsize=14)
         plt.show()
 
     if returnSurfaces:
@@ -324,20 +388,17 @@ if __name__ == "__main__":
     # Open raw segmentation surfaces
     # surf_array_obj = np.load('data/rawFinal/slicewise_z200-780_allSurf_raw.npy', allow_pickle=True)
     # surf_array_obj = np.load('data/H29_slicewise_z200-780_allSurf_raw.npy', allow_pickle=True)
-    surf_array_obj = np.load('data/rawFinal/H29big_slicewise_z380-620_allSurf_raw.npy', allow_pickle=True)
-    # surf_array_obj = np.load('data/H29big_slicewise_z380-620_allSurf_raw.npy', allow_pickle=True)
-    # surf_array_obj = np.load('data/rawFinal/NLbig_slicewise_z390-640_allSurf_raw_2.npy', allow_pickle=True)
-    # surf_array_obj = np.load('data/NLbig_slicewise_z390-640_rot_-15_allSurf_raw.npy', allow_pickle=True)
-    # surf_array_obj = np.load('data/rawFinal/NL_slicewise_z340-790_allSurf_raw_2.npy', allow_pickle=True)
-    # surf_array_obj = np.load('data/NL_slicewise_z340-790_rot_-15_allSurf_raw.npy', allow_pickle=True)
-    # surf_array_obj = np.load('data/rawFinal/PD_slicewise_z0-950_allSurf_raw.npy', allow_pickle=True)
-    # surf_array_obj = np.load('data/rawFinal/PBbig_slicewise_z250-780_allSurf_raw.npy', allow_pickle=True)
+    # surf_array_obj = np.load('data/rawFinal/H29big_slicewise_z380-620_allSurf_raw.npy', allow_pickle=True)
+    # surf_array_obj = np.load('data/rawFinal/NL_slicewise_z240-790_rot_-15_allSurf_raw.npy', allow_pickle=True)
+    # surf_array_obj = np.load('data/rawFinal/NLbig_slicewise_z390-640_rot_-15_allSurf_raw.npy', allow_pickle=True)
+    # surf_array_obj = np.load('data/rawFinal/PD_slicewise_z0-950_rot_-15_allSurf_raw.npy', allow_pickle=True)
+    surf_array_obj = np.load('data/rawFinal/PBbig_slicewise_z250-780_rot_-15_allSurf_raw.npy', allow_pickle=True)
     # pixelSize = 0.0078329 #mm 
-    pixelSize = 0.017551 #mm 
-    # pixelSize = 0.031504 #mm 
+    # pixelSize = 0.017551 #mm 
     # pixelSize = 0.015172 #mm 
+    # pixelSize = 0.031504 #mm 
     # pixelSize = 0.015752 #mm 
-    # pixelSize = 0.032761 #mm 
+    pixelSize = 0.032761 #mm 
     # pixelSize = 1 # For ParaView
 
     meshSize = [6,6]
@@ -349,7 +410,8 @@ if __name__ == "__main__":
     [shell_array_list, surf_array_list] = generate_shell_model(surf_array_list,
                                                                 pixelSize=pixelSize,
                                                                 meshSize=meshSize,
-                                                                smoothingSigma=1,
+                                                                smoothingSigma=2,
+                                                                method=3,
                                                                 returnSurfaces=True,
                                                                 plotThickness=True)
 
@@ -359,6 +421,6 @@ if __name__ == "__main__":
 
     # partFilePath = "data/abaqusShells/templatePart.inp"
     # masterFilePath = "data/abaqusShells/templateMaster.inp"
-    # savePath = "data/abaqusShells/H29_slicewise_z200-780_4x_meanThickness/"
+    # savePath = "data/abaqusShells/PBbig_slicewise_z250-780_rot_-15_2x/"
 
     # save_fem_shell_model(shell_array_list, partFilePath, masterFilePath, savePath)

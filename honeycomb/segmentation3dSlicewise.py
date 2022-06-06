@@ -283,15 +283,14 @@ class SegmentationPipeline:
 
 if __name__ == "__main__":
     # TODO: Add cost function weight as the parameter, try decreasing the number of points along a normal line
-    I = skimage.io.imread('data/29-2016_29-2016-60kV-zoom-center_recon.tif')
-    # I = skimage.io.imread('data/29-2016_29-2016-60kV-LFoV-center-+-1-ring_recon.tif')
+    # I = skimage.io.imread('data/29-2016_29-2016-60kV-zoom-center_recon.tif')
+    I = skimage.io.imread('data/29-2016_29-2016-60kV-LFoV-center-+-1-ring_recon.tif')
     # I = skimage.io.imread('data/NL07C_NL07C-60kV-LFoV-center-+-1-ring_recon.tif')
     # I = skimage.io.imread('data/NL07C_NL07C-60kV-zoom-center_recon.tif')
     # I = skimage.io.imread('data/PD27A-60kV-zoom-center_recon.tif')
     # I = skimage.io.imread('data/PB27A-60kV-LFoV-center-+-1-ring_recon.txm.tif')
 
-    I = I[200:250]
-    # I = I[:100,:,:]
+    I = I[380:620,:,:]
 
     # Rotation (if needed)
     # Inew = []
@@ -300,9 +299,9 @@ if __name__ == "__main__":
     # I = np.array(Inew)
 
     ####### Params #######
-    visualize = True # if True - visualizes the unfolding process steps
+    visualize = False # if True - visualizes the unfolding process steps
     #### Segmentation params
-    wallNum = 1
+    wallNum = 8
     # savePointsPath="data/cornerPoints/NLbig_z390-640_rot_-15.txt"
     # savePointsPath="data/cornerPoints/H29big_slicewise_z380-620.txt"
     # loadPointsPath="data/cornerPoints/NLbig_z390-640_rot_-15.txt"
@@ -310,24 +309,24 @@ if __name__ == "__main__":
     # savePointsPath = "data/cornerPoints/PD_z0-950_rot_-15.txt"
     # savePointsPath = "data/cornerPoints/PBbig_z250-780_rot_-15.txt"
     savePointsPath = ""
-    loadPointsPath = "data/cornerPoints/H29_z200-250_1surf.txt"
+    loadPointsPath = "data/cornerPoints/H29big_slicewise_z380-620.txt"
     #### Unfolding params
-    interpStep = 10/4 # Distance between the interpolated points
-    normalLinesRange = 30 # Range (half of the length) of lines normal to interpolation points
+    interpStep = 1 # Distance between the interpolated points
+    normalLinesRange = 15 # Range (half of the length) of lines normal to interpolation points
     normalLinesNumPoints = 60 # Number of interpolation points along a normal line
     #### Detection params
     # In segmentation
-    returnHelperSurfaces = True # if True, returns also dark helper surfaces from surface detection process
+    returnHelperSurfaces = False # if True, returns also dark helper surfaces from surface detection process
     a_parabola = 0.05 # a parameter of y=ax^2+b equation, used to modify the helper detection cost function
     # Helper
     helperDetectionSmoothness = 1 # how much in y direction the line can move with each step in the x direction (only int values)
     # Main detection
-    edgeSmoothness=2 
+    edgeSmoothness=1 
     helperSmoothness=1 
-    helperWeight=180 # multiplier of how much more "important" the helper line detetion is
-    wallThickness=[6,25] # min-max value of the distance between teh edges of the wall
-    darkHelperDist=[12, 35] # min-max distance between the "dark" helper lines following the background path
-    darkWhiteHelperDist=[1,30] # min-max distance between a "dark" helper line and the wall central helper line
+    helperWeight=100 # multiplier of how much more "important" the helper line detetion is
+    wallThickness=[4,16] # min-max value of the distance between teh edges of the wall
+    darkHelperDist=[8, 20] # min-max distance between the "dark" helper lines following the background path
+    darkWhiteHelperDist=[1,15] # min-max distance between a "dark" helper line and the wall central helper line
     # Cost function
     wallCostWeight = 0.5 # defines the position of 0.5 probability value in the wall cost function, if set to 0.5 it is in the middle between the means of the distributions
     helperCostWeight = 0.001 # same as above, applies both to helper detection and to helper surfaces in the main detection
@@ -344,7 +343,7 @@ if __name__ == "__main__":
     # Slicewise segmentation instance
     pipeline = SegmentationPipeline(imgStack=I, 
                                     wallDetector=wallDetector, 
-                                    helperDetector=None, 
+                                    helperDetector=helperDetector, 
                                     interpStep=interpStep, 
                                     normalLinesRange=normalLinesRange, 
                                     normalLinesNumPoints=normalLinesNumPoints, 
@@ -380,6 +379,6 @@ if __name__ == "__main__":
     # Save the results
     # surf = misc.layersToSurface(layersList)
     # surf_array = np.array(surf)
-    # np.save("data/H29_slicewise_z200-780_allSurf_raw.npy", surf_array)
+    # np.save("data/rawTest/H29big_slicewise_z380-620_allSurf_raw.npy", surf_array)
 
-    # vwl.save_multSurf2vtk('data/surfaces/slicewise_z200New_allSurf.vtk', surf)
+    # vwl.save_multSurf2vtk('data/surfaces/H29big_slicewise_z380-620_allSurf.vtk', surf)

@@ -259,7 +259,6 @@ if __name__ == "__main__":
     # I = skimage.io.imread('data/PB27A-60kV-LFoV-center-+-1-ring_recon.txm.tif')
 
     I = I[200:250]
-    # I = I[:100,:,:]
 
     # Rotation (if needed)
     # Inew = []
