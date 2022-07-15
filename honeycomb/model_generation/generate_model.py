@@ -322,6 +322,87 @@ def save_fem_shell_model(shell_array_list, part_file_path, master_file_path, sav
         f.write(contents)
 
 
+def correct_overlap(surf_array_list, it_max=200):
+
+    for i in range(len(surf_array_list)):
+        surf_array = surf_array_list[i]
+
+        dir_vec_1 = surf_array[:2,1:,:] - surf_array[:2,:-1,:]
+        dir_vec_1 = dir_vec_1 / np.linalg.norm(dir_vec_1, axis=0)
+
+        dir_dot_1 = (dir_vec_1[:,1:,:]*dir_vec_1[:,:-1,:]).sum(0)
+        dir_cross_1 = np.cross(dir_vec_1[:,1:,:],dir_vec_1[:,:-1,:], axis=0)
+        angles = np.arctan2(np.linalg.norm(dir_cross_1),dir_dot_1)
+        # angles = np.arccos(np.clip(dir_dot_1, -1.0, 1.0))
+
+        # angleErrors = np.where((angles.transpose()>np.pi/2)) #transposition to get slicewise order
+
+        angleErrors = np.where((np.flip(angles.transpose(),axis=1)>np.pi/2))
+        angleErrors = list(angleErrors)
+        angleErrors[1] = angles.shape[0]-1-angleErrors[1]
+        angleErrors = tuple(angleErrors)
+
+        it = 0
+        while angleErrors[0].size > 0 and it < it_max:
+            _, sliceIndices = np.unique(angleErrors[0],return_index=True)
+            for j in range(len(sliceIndices)):
+                numAveraged = 0
+                anglePos = np.array([angleErrors[1][j],angleErrors[0][j]])
+                currPoint = surf_array[:,anglePos[0]+2,anglePos[1]]
+                angle = 0
+                avgPoint = 0
+                dist = 0
+                
+                while numAveraged <= 1 or (anglePos[0]-numAveraged > 0 and (angle > np.pi/2)):
+                    oldPoint = currPoint
+                    currPoint = surf_array[:,anglePos[0]+2-numAveraged,anglePos[1]]
+                    avgPoint = numAveraged*avgPoint + currPoint
+                    numAveraged += 1
+                    avgPoint = avgPoint/numAveraged
+                    dist = dist + np.linalg.norm(oldPoint-currPoint)
+                    
+                    if numAveraged > 1:
+                        pointCorr = surf_array[:2,anglePos[0]+2-numAveraged,anglePos[1]]
+                        corrVec = avgPoint[:2] - pointCorr
+                        corrVec = corrVec/np.linalg.norm(corrVec)
+                        newVec = dir_vec_1[:,anglePos[0]+1-numAveraged,anglePos[1]]
+                        
+                        angle = np.arctan2(np.linalg.norm(np.cross(corrVec,newVec)),np.dot(corrVec,newVec))
+                        #check if correction point is further away than the newly addeed points will be
+                        corrDistance = np.linalg.norm(avgPoint[:2]-pointCorr)
+                        if corrDistance < dist/2:
+                            dist = dist - (dist/2-corrDistance)
+                            angle = np.pi # fake angle to enforce point addition
+                        
+                step = dist/(numAveraged-1)
+                corrVec = np.array([corrVec[0],corrVec[1],0])
+                startPoint = avgPoint +(dist/2)*corrVec
+                for k in range(numAveraged):
+                    surf_array[:,anglePos[0]+2-k,anglePos[1]] = startPoint - step*k*corrVec
+            
+            
+            dir_vec_1 = surf_array[:2,1:,:] - surf_array[:2,:-1,:]
+            dir_vec_1 = dir_vec_1 / np.linalg.norm(dir_vec_1, axis=0)
+
+            dir_dot_1 = (dir_vec_1[:,1:,:]*dir_vec_1[:,:-1,:]).sum(0)
+            dir_cross_1 = np.cross(dir_vec_1[:,1:,:],dir_vec_1[:,:-1,:], axis=0)
+            angles = np.arctan2(np.linalg.norm(dir_cross_1),dir_dot_1)
+            # angles = np.arccos(np.clip(dir_dot_1, -1.0, 1.0))
+
+            # angleErrors = np.where((angles.transpose()>np.pi/2)) #transposition to get slicewise order
+
+            angleErrors = np.where((np.flip(angles.transpose(),axis=1)>np.pi/2))
+            angleErrors = list(angleErrors)
+            angleErrors[1] = angles.shape[0]-1-angleErrors[1]
+            angleErrors = tuple(angleErrors)
+            
+            it += 1
+
+        surf_array_list[i] = surf_array
+
+    return surf_array_list
+
+
 def generate_shell_model(surf_array_list,pixelSize=1,meshSize=[6,6],smoothingSigma=1,method=1,returnSurfaces=True, plotThickness=True):
     """Generates a shell representation of the honeycomb structure from its segmented wall edges.
     Params:\n
@@ -336,6 +417,9 @@ def generate_shell_model(surf_array_list,pixelSize=1,meshSize=[6,6],smoothingSig
     returnSurfaces - if True, returns also original surfaces (reinterpolated and smoothed)\n
     plotThickness - if True, plots the calculated wall thickness data
     """
+    # Correct overlap
+    surf_array_list = correct_overlap(surf_array_list)
+
     # Calculate shell surfaces
     shell_array_list = []
     minList = []
@@ -401,17 +485,20 @@ if __name__ == "__main__":
     pixelSize = 0.032761 #mm 
     # pixelSize = 1 # For ParaView
 
-    meshSize = [6,6]
+    meshSize = [1,1]
 
     # Retrieve list of surfaces from the object array
     surf_array_list = npy_to_surf_list(surf_array_obj)
+
+    # TEMP remove
+    # surf_array_list = surf_array_list[4:5]
 
     # Generate shell model
     [shell_array_list, surf_array_list] = generate_shell_model(surf_array_list,
                                                                 pixelSize=pixelSize,
                                                                 meshSize=meshSize,
-                                                                smoothingSigma=2,
-                                                                method=3,
+                                                                smoothingSigma=1,
+                                                                method=2,
                                                                 returnSurfaces=True,
                                                                 plotThickness=True)
 
